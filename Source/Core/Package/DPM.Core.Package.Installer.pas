@@ -972,6 +972,7 @@ var
   platform : TDPMPlatform;
   platformResult : boolean;
   ambiguousProjectVersion : boolean;
+  ambiguousVersions : string;
 begin
   result := false;
 
@@ -983,10 +984,10 @@ begin
     exit;
   end;
 
-  ambiguousProjectVersion := IsAmbigousProjectVersion(projectEditor.ProjectVersion);
+  ambiguousProjectVersion := IsAmbigousProjectVersion(projectEditor.ProjectVersion, ambiguousVersions);
 
   if ambiguousProjectVersion and (options.CompilerVersion = TCompilerVersion.UnknownVersion) then
-    FLogger.Warning('ProjectVersion [' + projectEditor.ProjectVersion + '] is ambiguous, recommend specifying compiler version on command line.');
+    FLogger.Warning('ProjectVersion [' + projectEditor.ProjectVersion + '] is ambiguous (' + ambiguousVersions  +'), recommend specifying compiler version on command line.');
 
   //if the compiler version was specified (either on the command like or through a package file)
   //then make sure our dproj is actually for that version.
@@ -1087,62 +1088,76 @@ var
   config : IConfiguration;
 begin
   result := false;
-  if (not options.Validated) and (not options.Validate(FLogger)) then
-    exit
-  else if not options.IsValid then
-    exit;
+  try
+    if (not options.Validated) and (not options.Validate(FLogger)) then
+      exit
+    else if not options.IsValid then
+      exit;
 
-  config := FConfigurationManager.LoadConfig(options.ConfigFile);
-  if config = nil then
-    exit;
+    config := FConfigurationManager.LoadConfig(options.ConfigFile);
+    if config = nil then
+      exit;
 
-  FPackageCache.Location := config.PackageCacheLocation;
-  if not FRepositoryManager.Initialize(config) then
-  begin
-    FLogger.Error('Unable to initialize the repository manager.');
-    exit;
-  end;
-
-
-  if FileExists(options.ProjectPath) then
-  begin
-    if ExtractFileExt(options.ProjectPath) <> '.dproj' then
+    FPackageCache.Location := config.PackageCacheLocation;
+    if not FRepositoryManager.Initialize(config) then
     begin
-      FLogger.Error('Unsupported project file type [' + options.ProjectPath + ']');
-    end;
-    SetLength(projectFiles, 1);
-    projectFiles[0] := options.ProjectPath;
-
-  end
-  else if DirectoryExists(options.ProjectPath) then
-  begin
-    projectFiles := TArray <string> (TDirectory.GetFiles(options.ProjectPath, '*.dproj'));
-    if Length(projectFiles) = 0 then
-    begin
-      FLogger.Error('No dproj files found in projectPath : ' + options.ProjectPath);
+      FLogger.Error('Unable to initialize the repository manager.');
       exit;
     end;
-    FLogger.Information('Found ' + IntToStr(Length(projectFiles)) + ' dproj file(s) to install into.');
-  end
-  else
-  begin
-    //should never happen when called from the commmand line, but might from the IDE plugin.
-    FLogger.Error('The projectPath provided does no exist, no project to install to');
-    exit;
-  end;
 
-  if options.PackageFile <> '' then
-  begin
-    if not FileExists(options.PackageFile) then
+    if not FRepositoryManager.HasSources then
     begin
-      //should never happen if validation is called on the options.
-      FLogger.Error('The specified packageFile [' + options.PackageFile + '] does not exist.');
+      FLogger.Error('No package sources are defined. Use `dpm sources add` command to add a package source.');
       exit;
     end;
-    result := InstallPackageFromFile(cancellationToken, options, TArray <string> (projectFiles), config);
-  end
-  else
-    result := InstallPackageFromId(cancellationToken, options, TArray <string> (projectFiles), config);
+
+
+    if FileExists(options.ProjectPath) then
+    begin
+      if ExtractFileExt(options.ProjectPath) <> '.dproj' then
+      begin
+        FLogger.Error('Unsupported project file type [' + options.ProjectPath + ']');
+      end;
+      SetLength(projectFiles, 1);
+      projectFiles[0] := options.ProjectPath;
+
+    end
+    else if DirectoryExists(options.ProjectPath) then
+    begin
+      projectFiles := TArray <string> (TDirectory.GetFiles(options.ProjectPath, '*.dproj'));
+      if Length(projectFiles) = 0 then
+      begin
+        FLogger.Error('No dproj files found in projectPath : ' + options.ProjectPath);
+        exit;
+      end;
+      FLogger.Information('Found ' + IntToStr(Length(projectFiles)) + ' dproj file(s) to install into.');
+    end
+    else
+    begin
+      //should never happen when called from the commmand line, but might from the IDE plugin.
+      FLogger.Error('The projectPath provided does no exist, no project to install to');
+      exit;
+    end;
+
+    if options.PackageFile <> '' then
+    begin
+      if not FileExists(options.PackageFile) then
+      begin
+        //should never happen if validation is called on the options.
+        FLogger.Error('The specified packageFile [' + options.PackageFile + '] does not exist.');
+        exit;
+      end;
+      result := InstallPackageFromFile(cancellationToken, options, TArray <string> (projectFiles), config);
+    end
+    else
+      result := InstallPackageFromId(cancellationToken, options, TArray <string> (projectFiles), config);
+  except
+    on e : Exception do
+    begin
+      FLogger.Error(e.Message);
+      result := false;
+    end;
+  end;
 
 end;
 
@@ -1218,80 +1233,95 @@ var
   projectRoot : string;
 begin
   result := false;
-  //commandline would have validated already, but IDE probably not.
-  if (not options.Validated) and (not options.Validate(FLogger)) then
-    exit
-  else if not options.IsValid then
-    exit;
+  try
+    //commandline would have validated already, but IDE probably not.
+    if (not options.Validated) and (not options.Validate(FLogger)) then
+      exit
+    else if not options.IsValid then
+      exit;
 
-  config := FConfigurationManager.LoadConfig(options.ConfigFile);
-  if config = nil then //no need to log, config manager will
-    exit;
+    config := FConfigurationManager.LoadConfig(options.ConfigFile);
+    if config = nil then //no need to log, config manager will
+      exit;
 
-  FPackageCache.Location := config.PackageCacheLocation;
-  if not FRepositoryManager.Initialize(config) then
-  begin
-    FLogger.Error('Unable to initialize the repository manager.');
-    exit;
-  end;
-
-  if FileExists(options.ProjectPath) then
-  begin
-    //TODO : If we are using a groupProj then we shouldn't allow different versions of a package in different projects
-    //need to work out how to detect this.
-
-    if ExtractFileExt(options.ProjectPath) = '.groupproj' then
+    FPackageCache.Location := config.PackageCacheLocation;
+    if not FRepositoryManager.Initialize(config) then
     begin
-      groupProjReader := TGroupProjectReader.Create(FLogger);
-      if not groupProjReader.LoadGroupProj(options.ProjectPath) then
-        exit;
+      FLogger.Error('Unable to initialize the repository manager.');
+      exit;
+    end;
 
-      projectList := TCollections.CreateList <string> ;
-      if not groupProjReader.ExtractProjects(projectList) then
-        exit;
+    if not FRepositoryManager.HasSources then
+    begin
+      FLogger.Error('No package sources are defined. Use `dpm sources add` command to add a package source.');
+      exit;
+    end;
 
-      //projects in a project group are likely to be relative, so make them full paths
-      projectRoot := ExtractFilePath(options.ProjectPath);
-      for i := 0 to projectList.Count - 1 do
+
+    if FileExists(options.ProjectPath) then
+    begin
+      //TODO : If we are using a groupProj then we shouldn't allow different versions of a package in different projects
+      //need to work out how to detect this.
+
+      if ExtractFileExt(options.ProjectPath) = '.groupproj' then
       begin
-        //sysutils.IsRelativePath returns false with paths starting with .\
-        if TPathUtils.IsRelativePath(projectList[i]) then
-          //TPath.Combine really should do this but it doesn't
-          projectList[i] := TPathUtils.CompressRelativePath(projectRoot, projectList[i])
+        groupProjReader := TGroupProjectReader.Create(FLogger);
+        if not groupProjReader.LoadGroupProj(options.ProjectPath) then
+          exit;
+
+        projectList := TCollections.CreateList <string> ;
+        if not groupProjReader.ExtractProjects(projectList) then
+          exit;
+
+        //projects in a project group are likely to be relative, so make them full paths
+        projectRoot := ExtractFilePath(options.ProjectPath);
+        for i := 0 to projectList.Count - 1 do
+        begin
+          //sysutils.IsRelativePath returns false with paths starting with .\
+          if TPathUtils.IsRelativePath(projectList[i]) then
+            //TPath.Combine really should do this but it doesn't
+            projectList[i] := TPathUtils.CompressRelativePath(projectRoot, projectList[i])
+        end;
+        projectFiles := projectList.ToArray;
+      end
+      else
+      begin
+        SetLength(projectFiles, 1);
+        projectFiles[0] := options.ProjectPath;
       end;
-      projectFiles := projectList.ToArray;
+    end
+    else if DirectoryExists(options.ProjectPath) then
+    begin
+      //todo : add groupproj support!
+      projectFiles := TArray <string> (TDirectory.GetFiles(options.ProjectPath, '*.dproj'));
+      if Length(projectFiles) = 0 then
+      begin
+        FLogger.Error('No project files found in projectPath : ' + options.ProjectPath);
+        exit;
+      end;
+      FLogger.Information('Found ' + IntToStr(Length(projectFiles)) + ' project file(s) to restore.');
     end
     else
     begin
-      SetLength(projectFiles, 1);
-      projectFiles[0] := options.ProjectPath;
-    end;
-  end
-  else if DirectoryExists(options.ProjectPath) then
-  begin
-    //todo : add groupproj support!
-    projectFiles := TArray <string> (TDirectory.GetFiles(options.ProjectPath, '*.dproj'));
-    if Length(projectFiles) = 0 then
-    begin
-      FLogger.Error('No project files found in projectPath : ' + options.ProjectPath);
+      //should never happen when called from the commmand line, but might from the IDE plugin.
+      FLogger.Error('The projectPath provided does no exist, no project to install to');
       exit;
     end;
-    FLogger.Information('Found ' + IntToStr(Length(projectFiles)) + ' project file(s) to restore.');
-  end
-  else
-  begin
-    //should never happen when called from the commmand line, but might from the IDE plugin.
-    FLogger.Error('The projectPath provided does no exist, no project to install to');
-    exit;
-  end;
 
-  result := true;
-  //TODO : create some sort of context object here to pass in so we can collect runtime/design time packages
-  for projectFile in projectFiles do
-  begin
-    if cancellationToken.IsCancelled then
-      exit;
-    result := RestoreProject(cancellationToken, options, projectFile, config) and result;
+    result := true;
+    //TODO : create some sort of context object here to pass in so we can collect runtime/design time packages
+    for projectFile in projectFiles do
+    begin
+      if cancellationToken.IsCancelled then
+        exit;
+      result := RestoreProject(cancellationToken, options, projectFile, config) and result;
+    end;
+  except
+    on e : Exception do
+    begin
+      FLogger.Error(e.Message);
+      result := false;
+    end;
   end;
 end;
 
@@ -1302,6 +1332,7 @@ var
   platform : TDPMPlatform;
   platformResult : boolean;
   ambiguousProjectVersion : boolean;
+  ambiguousVersions : string;
 begin
   result := false;
 
@@ -1318,10 +1349,10 @@ begin
   if cancellationToken.IsCancelled then
     exit;
 
-  ambiguousProjectVersion := IsAmbigousProjectVersion(projectEditor.ProjectVersion);
+  ambiguousProjectVersion := IsAmbigousProjectVersion(projectEditor.ProjectVersion, ambiguousVersions);
 
   if ambiguousProjectVersion and (options.CompilerVersion = TCompilerVersion.UnknownVersion) then
-    FLogger.Warning('ProjectVersion [' + projectEditor.ProjectVersion + '] is ambiguous, recommend specifying compiler on command line.');
+    FLogger.Warning('ProjectVersion [' + projectEditor.ProjectVersion + '] is ambiguous (' + ambiguousVersions  +'), recommend specifying compiler version on command line.');
 
   //if the compiler version was specified (either on the command like or through a package file)
   //then make sure our dproj is actually for that version.
@@ -1471,6 +1502,7 @@ var
   platform : TDPMPlatform;
   platformResult : boolean;
   ambiguousProjectVersion : boolean;
+  ambiguousVersions : string;
 begin
   result := false;
 
@@ -1487,10 +1519,10 @@ begin
   if cancellationToken.IsCancelled then
     exit;
 
-  ambiguousProjectVersion := IsAmbigousProjectVersion(projectEditor.ProjectVersion);
+  ambiguousProjectVersion := IsAmbigousProjectVersion(projectEditor.ProjectVersion, ambiguousVersions);
 
   if ambiguousProjectVersion and (options.CompilerVersion = TCompilerVersion.UnknownVersion) then
-    FLogger.Warning('ProjectVersion [' + projectEditor.ProjectVersion + '] is ambiguous, recommend specifying compiler on command line.');
+    FLogger.Warning('ProjectVersion [' + projectEditor.ProjectVersion + '] is ambiguous (' + ambiguousVersions  +'), recommend specifying compiler version on command line.');
 
   //if the compiler version was specified (either on the command like or through a package file)
   //then make sure our dproj is actually for that version.

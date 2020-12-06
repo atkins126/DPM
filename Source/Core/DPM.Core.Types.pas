@@ -45,12 +45,6 @@ type
 
   TCompilerVersion = (
     UnknownVersion,
-    //    RS7,        //need dof
-    //    RS2005,     //need bdsproj support
-    //    RS2006,     //need bdsproj support
-    RS2009,
-    RS2010,
-    RSXE,
     RSXE2,
     RSXE3,
     RSXE4,
@@ -133,7 +127,7 @@ function CompilerToBDSVersion(const compiler : TCompilerVersion) : string;
 function CompilerToCompilerVersionIntStr(const compiler : TCompilerVersion) : string;
 
 function ProjectVersionToCompilerVersion(const value : string) : TCompilerVersion;
-function IsAmbigousProjectVersion(const value : string) : boolean;
+function IsAmbigousProjectVersion(const value : string; var versions : string) : boolean;
 
 function ProjectPlatformToDPMPlatform(const value : string) : TDPMPlatform;
 
@@ -286,9 +280,6 @@ function AllPlatforms(const compiler : TCompilerVersion) : TDPMPlatforms;
 begin
   result := [];
   case compiler of
-    TCompilerVersion.RS2009,
-    TCompilerVersion.RS2010,
-    TCompilerVersion.RSXE : result := [TDPMPlatform.Win32];
     TCompilerVersion.RSXE2 : result := [TDPMPlatform.Win32, TDPMPlatform.Win64, TDPMPlatform.OSX32];
     TCompilerVersion.RSXE3,
     TCompilerVersion.RSXE4,
@@ -337,9 +328,6 @@ end;
 function CompilerToLibSuffix(const compiler : TCompilerVersion) : string;
 begin
   case compiler of
-    TCompilerVersion.RS2009 : result := '120';
-    TCompilerVersion.RS2010 : result := '140';
-    TCompilerVersion.RSXE : result := '150';
     TCompilerVersion.RSXE2 : result := '160';
     TCompilerVersion.RSXE3 : result := '170';
     TCompilerVersion.RSXE4 : result := '180';
@@ -361,9 +349,6 @@ end;
 function CompilerToBDSVersion(const compiler : TCompilerVersion) : string;
 begin
   case compiler of
-    TCompilerVersion.RS2009 : result := '6.0';
-    TCompilerVersion.RS2010 : result := '7.0';
-    TCompilerVersion.RSXE : result := '8.0';
     TCompilerVersion.RSXE2 : result := '9.0';
     TCompilerVersion.RSXE3 : result := '10.0';
     TCompilerVersion.RSXE4 : result := '11.0';
@@ -385,9 +370,6 @@ end;
 function CompilerToCompilerVersionIntStr(const compiler : TCompilerVersion) : string;
 begin
   case compiler of
-    TCompilerVersion.RS2009 : result := '20';
-    TCompilerVersion.RS2010 : result := '21';
-    TCompilerVersion.RSXE : result := '22';
     TCompilerVersion.RSXE2 : result := '23';
     TCompilerVersion.RSXE3 : result := '24';
     TCompilerVersion.RSXE4 : result := '25';
@@ -412,7 +394,7 @@ begin
   result := StringToDPMPlatform(value);
 end;
 
-function IsAmbigousProjectVersion(const value : string) : boolean;
+function IsAmbigousProjectVersion(const value : string; var versions : string) : boolean;
 var
   elements : TArray<string>;
   major : integer;
@@ -434,30 +416,44 @@ begin
     exit;
 
   case major of
-    12 :
-      begin
-        case minor of
-          0 : result := true; //ambiguous could be Delphi 2009 or Delphi 2010
-        end;
-      end;
     14 :
       begin
         case minor of
-          4 : result := true; //ambiguous could be xe3 update 2
+          4 :
+          begin
+            result := true; //ambiguous could be xe3 update 2
+            versions := 'XE3 Update 2 / XE4';
+          end;
         end;
       end;
     15 :
       begin
         case minor of
-          3 : result := true; //ambiguous could be xe6
+          3 :
+          begin
+            result := true; //ambiguous could be xe6
+            versions := 'XE5 / XE6';
+          end;
         end;
       end;
     18 :
       begin
         case minor of
-          1 : result := true; //ambiguous could be 10.0 Update 1 and Delphi 10.1
-          2 : result := true; //ambigous could be 10.1 Update 1 and Delphi 10.2
-          8 : result := true; //ambigous could be 10.3.x or Delphi 10.4
+          1 :
+          begin
+            result := true; //ambiguous could be 10.0 Update 1 and Delphi 10.1
+            versions := '10.0 Update 1 / 10.1';
+          end;
+          2 :
+          begin
+            result := true; //ambigous could be 10.1 Update 1 and Delphi 10.2
+            versions := '10.1 Update 1 / 10.2';
+          end;
+//          8 : //not confirmed.
+//          begin
+//            result := true; //ambigous could be 10.3.x or Delphi 10.4
+//            versions := '10.3 / 10.2';
+//          end;
         end;
       end;
   end;
@@ -491,13 +487,6 @@ begin
 
 
   case major of
-    12 :
-      begin
-        case minor of
-          0..1 : result := TCompilerVersion.RS2010;
-          2..3 : result := TCompilerVersion.RSXE;
-        end;
-      end;
     13 : result := TCompilerVersion.RSXE2;
     14 :
       begin
