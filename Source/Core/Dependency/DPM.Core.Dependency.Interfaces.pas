@@ -44,24 +44,40 @@ type
   TNodeVisitProc = reference to procedure(const node : IGraphNode);
 
   //a directed asyclic graph (DAG).
-  IGraphNode = interface
+  IGraphNode = interface(IPackageId)
     ['{20055C26-8E63-4936-8249-ACF8514A37E7}']
-    function GetLevel : integer;
+//    function GetLevel : integer;
     function GetId : string;
     function GetParent : IGraphNode;
-    function GetSelectedVersion : TPackageVersion;
-    procedure SetSelectedVersion(const value : TPackageVersion);
+    function GetVersion : TPackageVersion;
+    procedure SetVersion(const value : TPackageVersion);
 
     function GetSelectedOn : TVersionRange;
     procedure SetSelectedOn(const value : TVersionRange);
 
+    function GetSearchPaths : IList<string>;
+    function GetLibPath : string;
+    procedure SetLibPath(const value : string);
+    function GetBplPath : string;
+    procedure SetBplPath(const value : string);
+    procedure SetUseSource(const value : boolean);
+
+
     function GetChildNodes : IEnumerable<IGraphNode>;
 
+    function GetPlatform : TDPMPlatform;
+    function GetUseSource : boolean;
+    function GetIsTransitive : boolean;
+
+
     function AddChildNode(const id : string; const version : TPackageVersion; const selectedOn : TVersionRange) : IGraphNode;
-    //Breadth first search
+    ///
+    /// Breadth first search
     function FindFirstNode(const id : string) : IGraphNode;
     function FindNodes(const id : string) : IList<IGraphNode>;
-    //searches this node only
+
+    /// <summary> Searches this node only
+    /// </summary>
     function FindChild(const id : string) : IGraphNode;
 
     //removes any child with id recursively (and it's children)
@@ -71,12 +87,26 @@ type
     function IsTopLevel : boolean;
     function HasChildren : boolean;
     procedure VisitDFS(const visitor : TNodeVisitProc);
+
+    function ToIdVersionString : string;
+    //used by BOM check
+    function AreEqual(const otherNode : IGraphNode; const depth : integer = 1) : boolean;
+
     property Id : string read GetId;
-    property SelectedVersion : TPackageVersion read GetSelectedVersion write SetSelectedVersion;
     property SelectedOn : TVersionRange read GetSelectedOn write SetSelectedOn;
-    property Level : integer read GetLevel;
+//    property Level : integer read GetLevel;
+    property IsTransitive : boolean read GetIsTransitive;
     property ChildNodes : IEnumerable<IGraphNode>read GetChildNodes;
     property Parent : IGraphNode read GetParent;
+    property Platform : TDPMPlatform read GetPlatform;
+    property UseSource : boolean read GetUseSource write SetUseSource;
+
+    //build support
+    property SearchPaths : IList<string> read GetSearchPaths;
+    property LibPath : string read GetLibPath write SetLibPath;
+    property BplPath : string read GetBplPath write SetBplPath;
+
+
   end;
 
 

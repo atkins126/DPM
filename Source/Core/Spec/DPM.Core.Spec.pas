@@ -119,8 +119,7 @@ begin
     end
     else
     begin
-      existing := newBuildEntry.Clone;
-      targetPlatform.BuildEntries.Add(existing.Clone);
+      targetPlatform.BuildEntries.Add(newBuildEntry.Clone);
     end;
   end;
 end;
@@ -516,6 +515,8 @@ var
   buildEntryObj : TJsonObject;
   runtimeEntryObj : TJsonObject;
   designEntryObj : TJsonObject;
+  copyFileObj : TJsonObject;
+  i: Integer;
 begin
   result := '';
 
@@ -568,8 +569,6 @@ begin
       begin
         seachPathObj := targetPlatformObject.A['searchPaths'].AddObject;
         seachPathObj['path'] := searchPath.Path;
-        seachPathObj['sourceOnly'] := LowerCase(BoolToStr(searchPath.SourceOnly, true));
-        seachPathObj['binariesOnly'] := LowerCase(BoolToStr(searchPath.BinariesOnly, true));
       end;
     end;
 
@@ -582,7 +581,6 @@ begin
         if bplEntry.BuildId <> '' then
           runtimeEntryObj['buildId'] := bplEntry.BuildId;
         runtimeEntryObj['src'] := bplEntry.Source; //TODO : check this is expanded with variables
-        runtimeEntryObj['dest'] := bplEntry.Destination;
         runtimeEntryObj['copyLocal'] := bplEntry.CopyLocal;
       end;
     end;
@@ -595,7 +593,6 @@ begin
         if bplEntry.BuildId <> '' then
           designEntryObj['buildId'] := bplEntry.BuildId;
         designEntryObj['src'] := bplEntry.Source; //TODO : check this is expanded with variables
-        designEntryObj['dest'] := bplEntry.Destination;
         designEntryObj['install'] := bplEntry.Install;
       end;
     end;
@@ -610,13 +607,20 @@ begin
         buildEntryObj['project'] := buildEntry.Project;
         buildEntryObj['config'] := buildEntry.Config;
         buildEntryObj['bplOutputDir'] := buildEntry.BplOutputDir;
-        buildEntryObj['dcpOutputDir'] := buildEntry.BplOutputDir;
-        buildEntryObj['dcuOutputDir'] := buildEntry.BplOutputDir;
+        buildEntryObj['libOutputDir'] := buildEntry.LibOutputDir;
+        buildEntryObj['designOnly']   := buildEntry.DesignOnly;
+        buildEntryObj['buildForDesign']   := buildEntry.BuildForDesign;
+        if buildEntry.CopyFiles.Any then
+        begin
+          for i := 0 to buildEntry.CopyFiles.Count -1 do
+          begin
+            copyFileObj := buildEntryObj.A['copyFiles'].AddObject;
+            copyFileObj['src'] := buildEntry.CopyFiles[i].Source;
+            copyFileObj.B['flatten'] := buildEntry.CopyFiles[i].Flatten;
+          end;
+        end;
       end;
     end;
-
-
-
 
     result := Obj.ToJSON(False);
   finally
@@ -803,13 +807,11 @@ begin
         for bplEntry in targetPlatform.RuntimeFiles do
         begin
           bplEntry.Source := Trim(regEx.Replace(bplEntry.Source, evaluator));
-          bplEntry.Destination := Trim(regEx.Replace(bplEntry.Destination, evaluator));
         end;
 
         for bplEntry in targetPlatform.DesignFiles do
         begin
           bplEntry.Source := Trim(regEx.Replace(bplEntry.Source, evaluator));
-          bplEntry.Destination := Trim(regEx.Replace(bplEntry.Destination, evaluator));
         end;
 
         for buildEntry in targetPlatform.BuildEntries do
@@ -817,8 +819,7 @@ begin
           buildEntry.Id := regEx.Replace(buildEntry.Id, evaluator);
           buildEntry.Project := regEx.Replace(buildEntry.Project, evaluator);
           buildEntry.BplOutputDir := regEx.Replace(buildEntry.BplOutputDir, evaluator);
-          buildEntry.DcuOutputDir := regEx.Replace(buildEntry.DcuOutputDir, evaluator);
-          buildEntry.DcpOutputDir := regEx.Replace(buildEntry.DcpOutputDir, evaluator);
+          buildEntry.LibOutputDir := regEx.Replace(buildEntry.LibOutputDir, evaluator);
         end;
         for dependency in targetPlatform.Dependencies do
         begin

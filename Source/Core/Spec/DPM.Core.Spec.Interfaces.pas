@@ -129,12 +129,16 @@ type
   end;
 
 
-  ISpecBPLEntry = interface(ISpecFileEntry)
+  ISpecBPLEntry = interface(ISpecNode)
     ['{13723048-E2AA-45BE-A0F1-C446848F3936}']
+    function GetSource : string;
     function GetCopyLocal : boolean;
     function GetInstall : boolean;
     function GetBuildId : string;
+    procedure SetSource(const value : string);
+
     function Clone : ISpecBPLEntry;
+    property Source : string read GetSource write SetSource;
     property CopyLocal : boolean read GetCopyLocal; //ignored for design
     property Install : boolean read GetInstall; //ignored for runtime
     property BuildId : string read GetBuildId;
@@ -143,16 +147,12 @@ type
   ISpecSearchPath = interface(ISpecNode)
     ['{493371C5-CD82-49EF-9D2A-BA7C4CFA2550}']
     function GetPath : string;
-    function GetSourceOnly : boolean;
-    function GetBinariesOnly : boolean;
     procedure SetPath(const value : string);
 
     function IsGroup : boolean;
     function Clone : ISpecSearchPath;
 
     property Path : string read GetPath write SetPath;
-    property BinariesOnly : boolean read GetBinariesOnly;
-    property SourceOnly : boolean read GetSourceOnly;
   end;
 
 
@@ -165,27 +165,47 @@ type
     property SearchPaths : IList<ISpecSearchPath>read GetSearchPaths;
   end;
 
+  //post build copy operations for res, dfm etc
+  ISpecCopyEntry = interface(ISpecNode)
+  ['{F36D7156-0537-4BF4-9D51-E873B797FA27}']
+    function GetSource : string;
+    function GetFlatten : boolean;
+
+    function Clone : ISpecCopyEntry;
+
+    property Source : string read GetSource;
+    property Flatten : boolean read GetFlatten;
+  end;
+
   ISpecBuildEntry = interface(ISpecNode)
     ['{9E1850EB-40C4-421F-A47F-03FDD6286573}']
     function GetId : string;
     function GetProject : string;
     function GetConfig : string;
     function GetBplOutputDir : string;
-    function GetDcuOutputDir : string;
-    function GetDcpOutputDir : string;
+    function GetLibOutputDir : string;
+    function GetDesignOnly : boolean;
+    function GetBuildForDesign : boolean;
+    function GetCopyFiles : IList<ISpecCopyEntry>;
+
+
     procedure SetId(const value : string);
     procedure SetProject(const value : string);
     procedure SetBplOutputDir(const value : string);
-    procedure SetDcuOutputDir(const value : string);
-    procedure SetDcpOutputDir(const value : string);
+    procedure SetLibOutputDir(const value : string);
+    procedure SetDesignOnly(const value : boolean);
+    procedure SetBuildForDesign(const value : boolean);
 
     function Clone : ISpecBuildEntry;
     property Id : string read GetId write SetId;
     property Project : string read GetProject write SetProject;
     property Config : string read GetConfig;
+    property LibOutputDir : string read GetLibOutputDir write SetLibOutputDir;
     property BplOutputDir : string read GetBplOutputDir write SetBplOutputDir;
-    property DcuOutputDir : string read GetDcuOutputDir write SetDcuOutputDir;
-    property DcpOutputDir : string read GetDcpOutputDir write SetDcpOutputDir;
+
+    property DesignOnly   : boolean read GetDesignOnly write SetDesignOnly;
+    property BuildForDesign : boolean read GetBuildForDesign write SetBuildForDesign;
+    property CopyFiles : IList<ISpecCopyEntry> read GetCopyFiles;
   end;
 
 

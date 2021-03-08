@@ -65,6 +65,7 @@ implementation
 uses
   System.SysUtils,
   Generics.Defaults,
+  DPM.Core.Constants,
   DPM.Core.Dependency.Graph;
 
 { TDependencyResolver }
@@ -94,7 +95,7 @@ end;
 /// This a simple depth first search with backtracking. It records unresolvable paths (nogoods) to avoid searching those again
 /// When a conflict is found, it tries to resolve that by finding an overlapping dependency version range between the new
 /// dependency range and the one already resolved. If found then it will undo the previous resolution and push it back on
-/// the stack to be redone. If not then we have an unresolvable conflict and exit.
+/// the stack to be redone with the overlapping range. If not then we have an unresolvable conflict and exit.
 ///
 /// Note that top level (non transient) dependencies always win out in conflicts with transient dependencies.
 /// A small optimisation is to sort the dependencies by the width of their dependency version range and
@@ -143,7 +144,7 @@ begin
 
     for dependency in currentPackage.Dependencies do
     begin
-      FLogger.Information('Resolving dependency : ' + currentPackage.Id + '.' + currentPackage.Version.ToStringNoMeta + '->' + dependency.Id + ' ' + dependency.VersionRange.ToString, true);
+      FLogger.Information('Resolving dependency : ' + currentPackage.Id + '.' + currentPackage.Version.ToStringNoMeta + '->' + dependency.Id + ' ' + dependency.VersionRange.ToString);
       //first see if we have resolved this package already.
       if context.TryGetResolution(dependency.Id, resolution) then
       begin
@@ -153,7 +154,7 @@ begin
           FLogger.Debug('       conflict - selected version : ' + dependency.Id + '-' + resolution.Package.Version.ToString + ' does not satisfy ' + dependency.VersionRange.ToString);
 
           //if it's a top level package then the version is not negotiable.
-          if resolution.ParentId = 'root' then
+          if resolution.ParentId = cRootNode then
           begin
             FLogger.Error('Package conflict - selected version : ' + dependency.Id + '-' + resolution.Package.Version.ToString + ' does not satisfy ' + dependency.VersionRange.ToString);
             exit;
@@ -185,7 +186,7 @@ begin
         end
         else
         begin
-          FLogger.Debug('       resolved : ' + dependency.Id + '.' + resolution.Package.Version.ToString);
+          FLogger.Information('            resolved : ' + dependency.Id + '.' + resolution.Package.Version.ToString);
           //in the case where we are promoting a transient to a direct dependency, we need a range.
           //the direct will not have a range so we convert the version to a range.
           if resolution.VersionRange.IsEmpty then
@@ -251,7 +252,7 @@ begin
               if context.TryGetResolution(currentPackage.Id, resolution) then
               begin
                 //can't backtrack to a root (direct dependency)
-                if (resolution.ParentId <> 'root') and context.TryGetResolution(resolution.ParentId, parentResolution) then
+                if (resolution.ParentId <> cRootNode) and context.TryGetResolution(resolution.ParentId, parentResolution) then
                 begin
                   FLogger.Debug('Backtracking to : ' + parentResolution.Package.Id + '-' + parentResolution.Package.Version.ToString);
                   context.RemoveResolution(currentPackage.Id); //shouldn't this be the parentResolution.Pacakage???
@@ -272,7 +273,8 @@ begin
 
   result := true;
 
-  FLogger.Debug('Dependency resolution done in ' + IntToStr(FStopwatch.ElapsedMilliseconds) + 'ms');
+  FLogger.Success('Dependency resolution done in [' + IntToStr(FStopwatch.ElapsedMilliseconds) + 'ms]');
+  FLogger.NewLine;
 
 end;
 
@@ -290,7 +292,7 @@ function TDependencyResolver.ResolveForRestore(const cancellationToken : ICancel
 var
   context : IResolverContext;
 begin
-  context := TResolverContext.Create(FLogger, nil, projectReferences);
+  context := TResolverContext.Create(FLogger, options.CompilerVersion,  platform, projectReferences);
   result := DoResolve(cancellationToken, options, context, compilerVersion, platform);
   resolved := context.GetResolvedPackages;
   dependencyGraph := context.BuildDependencyGraph;

@@ -72,8 +72,11 @@ type
   TPackageInfo = class(TPackageIdentity, IPackageInfo, IPackageIdentity, IPackageId)
   private
     FDependencies : IList<IPackageDependency>;
+    FUseSource : boolean;
   protected
     function GetDependencies : IList<IPackageDependency>;
+    function GetUseSource : boolean;
+    procedure SetUseSource(const value : boolean);
     constructor Create(const sourceName : string; const spec : IPackageSpec); override;
   public
     class function CreateFromSpec(const sourceName : string; const spec : IPackageSpec) : IPackageInfo;
@@ -230,6 +233,16 @@ begin
 end;
 
 
+function TPackageInfo.GetUseSource: boolean;
+begin
+  result := FUseSource;
+end;
+
+procedure TPackageInfo.SetUseSource(const value: boolean);
+begin
+  FUseSource := value;
+end;
+
 { TPackageMetadataFull }
 
 constructor TPackageMetadata.Create(const sourceName : string; const spec : IPackageSpec);
@@ -251,7 +264,7 @@ begin
 
   for specSearchPath in spec.TargetPlatform.SearchPaths do
   begin
-    searchPath := TPackageSearchPath.Create(specSearchPath.Path, specSearchPath.BinariesOnly, specSearchPath.SourceOnly);
+    searchPath := TPackageSearchPath.Create(specSearchPath.Path);
     FSearchPaths.Add(searchPath);
   end;
 end;

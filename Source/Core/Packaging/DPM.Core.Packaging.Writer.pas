@@ -82,17 +82,6 @@ begin
   FSpecReader := specReader;
 end;
 
-function StripBase(const base : string; const fileName : string) : string;
-begin
-  if TStringUtils.StartsWith(fileName, base) then
-    result := Copy(fileName, Length(base) + 1, Length(fileName))
-  else
-    //it's below or outside the base path,
-    //there's no way to know what else to do
-    //but just use the filename, so it will
-    //end up in the root folder??
-    result := ExtractFileName(fileName);
-end;
 
 function StripCurrent(const value : string) : string;
 begin
@@ -140,7 +129,7 @@ begin
       exit
     else
       raise Exception.Create('Directory not found : ' + pattern.Directory);
-  f := TPath.Combine(pattern.Directory, pattern.FileMask);
+  f := TPath.Combine(pattern.Directory, pattern.FileMask); //TODO : What whas this meant to do???
   files := TDirectory.GetFiles(pattern.Directory, pattern.FileMask, TSearchOption.soTopDirectoryOnly);
   for f in files do
   begin
@@ -154,7 +143,7 @@ begin
     if flatten then
       archivePath := dest + '\' + ExtractFileName(f)
     else
-      archivePath := dest + '\' + StripBase(basePath, f);
+      archivePath := dest + '\' + TPathUtils.StripBase(basePath, f);
     if TStringUtils.StartsWith(archivePath, '\') then
       Delete(archivePath, 1, 1);
     Inc(fileCount);
@@ -171,7 +160,6 @@ var
   sStream : TStringStream;
   antPattern : IAntPattern;
   fileEntry : ISpecFileEntry;
-  bplEntry : ISpecBPLEntry;
 
   procedure ValidateDestinationPath(const source, dest : string);
   begin
@@ -187,19 +175,10 @@ var
     searchBasePath : string;
     fileCount : integer;
 
-    function StripWildCard(const value : string) : string;
-    var
-      i : integer;
-    begin
-      result := value;
-      i := Pos('*', value);
-      if i > 0 then
-        Delete(result, i, Length(result));
-    end;
 
   begin
     ValidateDestinationPath(source, dest);
-    searchBasePath := StripWildCard(TPathUtils.CompressRelativePath(basePath, source));
+    searchBasePath := TPathUtils.StripWildCard(TPathUtils.CompressRelativePath(basePath, source));
     searchBasePath := ExtractFilePath(searchBasePath);
     fsPatterns := antPattern.Expand(source);
     fileCount := 0;
@@ -210,29 +189,27 @@ var
       FLogger.Warning('No files were found for pattern [' + source + ']');
   end;
 
-  procedure AddBPLToArchive(const source, dest : string);
-  var
-    archivePath : string;
-    sourceFile : string;
-    fileName : string;
-  begin
-    ValidateDestinationPath(source, dest);
-    sourceFile := TPathUtils.CompressRelativePath(basePath, source);
-    if not FileExists(sourceFile) then
-      raise Exception.Create('File [' + sourceFile + '] does not exist.');
-
-    fileName := ExtractFileName(sourceFile);
-
-    archivePath := dest + '\' + fileName;
-    FLogger.Debug('Writing file [' + archivePath + '] to package.');
-    FArchiveWriter.AddFile(sourceFile, archivePath);
-  end;
+//  procedure AddBPLToArchive(const source, dest : string);
+//  var
+//    archivePath : string;
+//    sourceFile : string;
+//    fileName : string;
+//  begin
+//    ValidateDestinationPath(source, dest);
+//    sourceFile := TPathUtils.CompressRelativePath(basePath, source);
+//    if not FileExists(sourceFile) then
+//      raise Exception.Create('File [' + sourceFile + '] does not exist.');
+//
+//    fileName := ExtractFileName(sourceFile);
+//
+//    archivePath := dest + '\' + fileName;
+//    FLogger.Debug('Writing file [' + archivePath + '] to package.');
+//    FArchiveWriter.AddFile(sourceFile, archivePath);
+//  end;
 
 begin
   result := false;
   sManifest := spec.GenerateManifestJson(version, targetPlatform);
-  //going with json
-//  sManifest := spec.GenerateManifestXML(version, targetPlatform);
   packageFileName := spec.MetaData.Id + '-' + CompilerToString(targetPlatform.Compiler) + '-' + DPMPlatformToString(targetPlatform.Platforms[0]) + '-' + version.ToStringNoMeta + cPackageFileExt;
   packageFileName := IncludeTrailingPathDelimiter(outputFolder) + packageFileName;
   FArchiveWriter.SetBasePath(basePath);
@@ -264,13 +241,13 @@ begin
     for fileEntry in targetPlatform.LibFiles do
       ProcessEntry(fileEntry.Source, fileEntry.Destination, fileEntry.Flatten, fileEntry.Exclude, fileEntry.Ignore);
 
-    for bplEntry in targetPlatform.RuntimeFiles do
-      if bplEntry.BuildId = '' then
-        AddBPLToArchive(bplEntry.Source, bplEntry.Destination);
-
-    for bplEntry in targetPlatform.DesignFiles do
-      if bplEntry.BuildId = '' then
-        AddBPLToArchive(bplEntry.Source, bplEntry.Destination);
+//    for bplEntry in targetPlatform.RuntimeFiles do
+//      if bplEntry.BuildId = '' then
+//        AddBPLToArchive(bplEntry.Source, bplEntry.Destination);
+//
+//    for bplEntry in targetPlatform.DesignFiles do
+//      if bplEntry.BuildId = '' then
+//        AddBPLToArchive(bplEntry.Source, bplEntry.Destination);
 
     result := true;
   finally

@@ -84,19 +84,19 @@ type
   IPackageInfo = interface(IPackageIdentity)
     ['{5672DB4A-40BC-45E0-857C-39117D03C322}']
     function GetDependencies : IList<IPackageDependency>;
+    function GetUseSource : boolean;
+    procedure SetUseSource(const value : boolean);
+
 
     property Dependencies : IList<IPackageDependency>read GetDependencies;
+    property UseSource : boolean read GetUseSource write SetUseSource;
   end;
 
   IPackageSearchPath = interface
     ['{55B09D0C-01E4-4FF3-977F-98A1A57B62B1}']
     function GetPath : string;
-    function GetSourceOnly : boolean;
-    function GetBinariesOnly : boolean;
 
     property Path : string read GetPath;
-    property BinariesOnly : boolean read GetBinariesOnly;
-    property SourceOnly : boolean read GetSourceOnly;
   end;
 
 
@@ -242,14 +242,13 @@ type
   IPackageInstallerContext = interface
     ['{8FD229A2-FE7B-4315-84B2-FF18B78C76DC}']
     procedure Reset;
-    //    //provides context for build and runtime package copying.
-    //    procedure StartProject(const projectFile : string);
+    procedure StartProject(const projectFile : string);
+    procedure EndProject(const projectFile : string);
     //
-    //    procedure EndProject(const projectFile : string);
-    //
-    //    //register a bpl for install into the IDE.
-    //    procedure RegisterDesignPackage(const packageFile : string; const dependsOn : IList<string>);
-    //
+    //register a bpl for install into the IDE.
+    procedure RegisterDesignPackage(const packageFile : string; const dependsOn : IList<string>);
+
+    function IsDesignPackageInstalled(const packageName : string) : boolean;
 
   end;
 

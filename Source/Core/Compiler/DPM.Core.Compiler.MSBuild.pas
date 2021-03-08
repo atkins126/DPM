@@ -45,46 +45,46 @@ type
     FCompilerLogFile : string;
 
     FBPLOutput : string;
-    FDCPOutput : string;
-    FDCUOutput : string;
-    FHPPOutput : string;
-    FOBJOutput : string;
-
+    FLibOutput : string;
 
     FCompilerVersion : TCompilerVersion;
     FConfiguration : string;
+    FProjectFile : string;
     FPlatform : TDPMPlatform;
     FSearchPaths : IList<string>;
     FVerbosity : TCompilerVerbosity;
 
     FCompilerOutput : TStringList;
+
+    FBuildForDesign : boolean;
   protected
     function GetBPLOutput : string;
     function GetCompilerVersion : TCompilerVersion;
     function GetConfiguration : string;
-    function GetDCPOutput : string;
-    function GetDCUOutput : string;
-    function GetHPPOutput : string;
-    function GetOBJOutput : string;
+
+    function GetLibOutput : string;
     function GetPlatform : TDPMPlatform;
     function GetSearchPaths : IList<string>;
-    procedure SetBPLOutput(const value : string);
+
     procedure SetConfiguration(const value : string);
-    procedure SetDCPOutput(const value : string);
-    procedure SetDCUOutput(const value : string);
-    procedure SetHPPOutput(const value : string);
-    procedure SetOBJOutput(const value : string);
+
+    procedure SetLibOutput(const value : string);
+    procedure SetBPLOutput(const value : string);
+
     procedure SetSearchPaths(const value : IList<string>);
     function GetVerbosity : TCompilerVerbosity;
     procedure SetVerbosity(const value : TCompilerVerbosity);
 
 
+    function GetPlatformName : string;
+    function GetProjectSearchPath(const configName : string) : string;
+
     function GetCompilerOutput : TStrings;
 
-    function GetMSBuildParameters(const configName : string) : string;
-    function GetCommandLine(const projectFile : string; const configName : string) : string;
+    function GetMSBuildParameters(const configName : string; const packageVersion : TPackageVersion) : string;
+    function GetCommandLine(const projectFile : string; const configName : string; const packageVersion : TPackageVersion) : string;
 
-    function BuildProject(const cancellationToken : ICancellationToken; const projectFile : string; const configName : string) : Boolean;
+    function BuildProject(const cancellationToken : ICancellationToken; const projectFile : string; const configName : string; const packageVersion : TPackageVersion; const forDesign : boolean) : Boolean;
   public
     constructor Create(const logger : ILogger; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const env : ICompilerEnvironmentProvider);
     destructor Destroy; override;
@@ -96,37 +96,60 @@ implementation
 uses
   System.SysUtils,
   System.IOUtils,
-  DPM.Core.Utils.Process;
+  DPM.Core.Utils.Path,
+  DPM.Core.Utils.Process,
+  DPM.Core.Compiler.ProjectSettings;
 
 
 { TMSBuildCompiler }
 
-function TMSBuildCompiler.BuildProject(const cancellationToken : ICancellationToken; const projectFile : string; const configName : string) : Boolean;
+function TMSBuildCompiler.BuildProject(const cancellationToken : ICancellationToken; const projectFile : string; const configName : string; const packageVersion : TPackageVersion; const forDesign : boolean) : Boolean;
 var
-  commandLine                 : string;
+  commandLine : string;
+  env : IEnvironmentBlock;
 begin
   result := false;
+  FBuildForDesign := forDesign;
   FCompilerOutput.Clear;
 
   FCompilerLogFile := TPath.GetTempFileName;
+  FProjectFile := projectFile;
 
-  commandLine := GetCommandLine(projectFile, configName);
+  commandLine := GetCommandLine(projectFile, configName, packageVersion);
 
+  env := TEnvironmentBlockFactory.Create(nil, true);
+  //THE IDE set these, which makes it difficult to debug the command line version.
+  {$IFDEF DEBUG}
+  env.RemoveVariable('BDS');
+  env.RemoveVariable('BDSLIB');
+  env.RemoveVariable('BDSINCLUDE');
+  env.RemoveVariable('BDSCOMMONDIR');
+  {$ENDIF}
+  env.RemoveVariable('PLATFORM');
+  //envoptions causes problems on our build machines, haven't figured out why yet.
+  env.AddOrSet('ImportEnvOptions','false');
+  FLogger.Verbose('Compler - cmdline : ' + commandLine,false);
   try
-    result := TProcess.Execute(cancellationToken, 'cmd.exe', commandLine) = 0;
+    result := TProcess.Execute2(cancellationToken, 'cmd.exe', commandLine,'',env) = 0;
   except
     on e : Exception do
     begin
       FLogger.Error('Error executing compiler : ' + e.Message);
+      exit;
     end;
   end;
 
   //TODO : Doesn't give realtime feedback, remove when we have a CreateProcess version of TProcess.
   if TFile.Exists(FCompilerLogFile) then
   begin
-    FCompilerOutput.LoadFromFile(FCompilerLogFile);
+    if not result then
+    begin
+      FCompilerOutput.LoadFromFile(FCompilerLogFile);
+      //TODO : This should be logged as an error, but then you would get a wall of red text which is hard to read.
+      FLogger.Information(FCompilerOutput.Text);
+      FCompilerOutput.Clear;
+    end;
     TFile.Delete(FCompilerLogFile);
-    FLogger.Information(FCompilerOutput.Text);
   end;
 end;
 
@@ -136,7 +159,7 @@ begin
   FCompilerVersion := compilerVersion;
   FPlatform := platform;
   FEnv := env;
-  FSearchPaths := TCollections.CreateList <string> ;
+  FSearchPaths := TCollections.CreateList<string>;
   FCompilerOutput := TStringList.Create;
 end;
 
@@ -146,20 +169,23 @@ begin
   inherited;
 end;
 
+function TMSBuildCompiler.GetLibOutput: string;
+begin
+  result := FLibOutput;
+end;
+
 function TMSBuildCompiler.GetBPLOutput : string;
 begin
   result := FBPLOutput;
 end;
 
-function TMSBuildCompiler.GetCommandLine(const projectFile, configName : string) : string;
-var
-  cmd                         : string;
+function TMSBuildCompiler.GetCommandLine(const projectFile, configName : string; const packageVersion : TPackageVersion) : string;
 begin
   //I don't like this... but it will do for a start.
 
-  result := 'call "' + FEnv.GetRsVarsFilePath(FCompilerVersion) + '\rsvars.bat"';
-  result := result + '& msbuild "' + projectfile + '" ' + GetMSBuildParameters(configName);
-  result := 'cmd.exe /c ' + cmd + ' > ' + FCompilerLogFile;
+  result := 'call "' + FEnv.GetRsVarsFilePath(FCompilerVersion) + '"';
+  result := result + '& msbuild "' + projectfile + '" ' + GetMSBuildParameters(configName, packageVersion);
+  result := ' cmd /c ' + result + ' > ' + FCompilerLogFile;
 end;
 
 function TMSBuildCompiler.GetCompilerOutput : TStrings;
@@ -177,54 +203,105 @@ begin
   result := FConfiguration;
 end;
 
-function TMSBuildCompiler.GetDCPOutput : string;
-begin
-  result := FDCPOutput;
-end;
 
-function TMSBuildCompiler.GetDCUOutput : string;
+function TMSBuildCompiler.GetMSBuildParameters(const configName : string; const packageVersion : TPackageVersion) : string;
+var
+  libPath : string;
+  bplPath : string;
 begin
-  result := FDCUOutput;
-end;
+  //build version info resource first, then bpl.
+  //this assumes the dproj has the correct version info.
+  //We should investigate updating the dproj.
+  result := '/target:BuildVersionResource;Build';
+  result := result + ' /p:Config=' + configName;
+  if FBuildForDesign then
+    result := result + ' /p:Platform=' + DPMPlatformToBDString(TDPMPlatform.Win32)
+  else
+    result := result + ' /p:Platform=' + DPMPlatformToBDString(FPlatform);
 
-function TMSBuildCompiler.GetHPPOutput : string;
-begin
-  result := FHPPOutput;
-end;
+  //THIS DOES NOT WORK!!!
+  //attempting to update version info
+//  result := result + ' /p:VerInfo_IncludeVerInfo=true';
+//  result := result + ' /p:VerInfo_MajorVer=' + IntToStr(packageVersion.Major);
+//  result := result + ' /p:VerInfo_MinorVer=' + IntToStr(packageVersion.Minor);
+//  result := result + ' /p:VerInfo_Release=' + IntToStr(packageVersion.Patch);
+//
+//  if packageVersion.IsStable then
+//    result := result + ' /p:VerInfo_Build=1'
+//  else
+//    result := result + ' /p:VerInfo_Build=0';
 
-function TMSBuildCompiler.GetMSBuildParameters(const configName : string) : string;
-begin
-  result := '/target:Build';
-  result := result + ' /p:config=' + configName;
-  result := result + ' /p:platform=' + DPMPlatformToBDString(FPlatform);
 
   //TODO : Check that these props are correctly named for all supported compiler versions.
 
-  if FDCPOutput <> '' then
-    result := result + ' /p:DCC_DcpOutput=' + ExcludeTrailingPathDelimiter(FDCPOutput); //msbuild is fussy!
-
-  if FDCUOutput <> '' then
-    result := result + ' /p:DCC_DcuOutput=' + ExcludeTrailingPathDelimiter(FDCUOutput);
+  if FLibOutput <> '' then
+  begin
+    libPath := TPathUtils.QuotePath(ExcludeTrailingPathDelimiter(FLibOutput)); //msbuild is fussy about trailing path delimeters!
+    result := result + ' /p:DCC_DcpOutput=' + libPath;
+    result := result + ' /p:DCC_DcuOutput=' + libPath;
+    result := result + ' /p:DCC_ObjOutput=' + libPath;
+    result := result + ' /p:DCC_HppOutput=' + libPath;
+    result := result + ' /p:DCC_BpiOutput=' + libPath;
+  end;
 
   if FBPLOutput <> '' then
-    result := result + ' /p:DCC_BplOutput=' + ExcludeTrailingPathDelimiter(FBPLOutput);
+  begin
+    bplPath := TPathUtils.QuotePath(ExcludeTrailingPathDelimiter(FBPLOutput));
+    result := result + ' /p:DCC_BplOutput=' + bplPath;
+  end;
 
-  if FOBJOutput <> '' then
-    result := result + ' /p:DCC_ObjOutput=' + ExcludeTrailingPathDelimiter(FOBJOutput);
+  //implict rebuild off - stops the E2466 Never-build package 'X' requires always-build package 'Y'
+  //Note that some third party libs like omnithreadlibrary have always-build/implicitbuild on
+  result := result + ' /p:DCC_OutputNeverBuildDcps=true';
 
-  if FHPPOutput <> '' then
-    result := result + ' /p:DCC_HppOutput=' + ExcludeTrailingPathDelimiter(FHPPOutput);
+  result := result + ' /p:DCC_UnitSearchPath=' +  GetProjectSearchPath(configName);
 
-end;
+ // result := result +  ' /v:diag';
+ end;
 
-function TMSBuildCompiler.GetOBJOutput : string;
-begin
-  result := FOBJOutput;
-end;
 
 function TMSBuildCompiler.GetPlatform : TDPMPlatform;
 begin
   result := FPlatform;
+end;
+
+function TMSBuildCompiler.GetPlatformName: string;
+begin
+  if FBuildForDesign then
+    result := DPMPlatformToBDString(TDPMPlatform.Win32)
+  else
+    result := DPMPlatformToBDString(FPlatform);
+end;
+
+function TMSBuildCompiler.GetProjectSearchPath(const configName: string): string;
+var
+  s : string;
+  settingsLoader : IProjectSettingsLoader;
+  platform : TDPMPlatform;
+begin
+  result := '';// '$(BDSLIB)\$(PLATFORM)\release;$(BDS)\include';
+  if FSearchPaths.Any then
+  begin
+    for s in FSearchPaths do
+    begin
+      if result <> '' then
+        result := result + ';';
+      result := result + ExcludeTrailingPathDelimiter(s);
+    end;
+  end;
+
+  if FBuildForDesign then
+    platform := TDPMPlatform.Win32
+  else
+    platform := FPlatform;
+
+  settingsLoader := TDPMProjectSettingsLoader.Create(FProjectFile, configName, platform);
+  s := settingsLoader.GetSearchPath;
+  if s <> '' then
+    result := s + ';' + result;
+
+  result := TPathUtils.QuotePath(result, true);
+
 end;
 
 function TMSBuildCompiler.GetSearchPaths : IList<string>;
@@ -237,6 +314,11 @@ begin
   result := FVerbosity;
 end;
 
+procedure TMSBuildCompiler.SetLibOutput(const value: string);
+begin
+  FLibOutput := value;
+end;
+
 procedure TMSBuildCompiler.SetBPLOutput(const value : string);
 begin
   FBPLOutput := value;
@@ -247,29 +329,12 @@ begin
   FConfiguration := value;
 end;
 
-procedure TMSBuildCompiler.SetDCPOutput(const value : string);
-begin
-  FDCPOutput := value;
-end;
-
-procedure TMSBuildCompiler.SetDCUOutput(const value : string);
-begin
-  FDCUOutput := value;
-end;
-
-procedure TMSBuildCompiler.SetHPPOutput(const value : string);
-begin
-  FHPPOutput := value;
-end;
-
-procedure TMSBuildCompiler.SetOBJOutput(const value : string);
-begin
-  FOBJOutput := value;
-end;
 
 procedure TMSBuildCompiler.SetSearchPaths(const value : IList<string> );
 begin
-  FSearchPaths := value;
+  FSearchPaths.Clear;
+  if value <> nil then
+    FSearchPaths.AddRange(value);
 end;
 
 procedure TMSBuildCompiler.SetVerbosity(const value : TCompilerVerbosity);

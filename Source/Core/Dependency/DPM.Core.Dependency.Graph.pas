@@ -29,6 +29,7 @@ unit DPM.Core.Dependency.Graph;
 interface
 
 uses
+  System.Classes,
   Spring.Collections,
   DPM.Core.Types,
   DPM.Core.Logging,
@@ -57,8 +58,14 @@ type
     FChildNodes : IDictionary<string, IGraphNode>;
     FId : string;
     FVersion : TPackageVersion;
+    FPlatform : TDPMPlatform;
     FSelectedOn : TVersionRange;
+    FUseSource : boolean;
     FLevel : integer;
+    FSearchPaths : IList<string>;
+    FLibPath : string;
+    FBplPath : string;
+    FCompilerVersion : TCompilerVersion;
   protected
     function AddChildNode(const id : string; const version : TPackageVersion; const selectedOn : TVersionRange) : IGraphNode;
     function FindFirstNode(const id : string) : IGraphNode;
@@ -68,8 +75,18 @@ type
     function GetId : string;
     function GetParent : IGraphNode;
     function GetSelectedOn : TVersionRange;
-    function GetSelectedVersion : TPackageVersion;
-    procedure SetSelectedVersion(const value : TPackageVersion);
+    function GetVersion : TPackageVersion;
+    function GetSearchPaths : IList<string>;
+    function GetLibPath : string;
+    procedure SetLibPath(const value : string);
+    function GetBplPath : string;
+    function GetCompilerVersion : TCompilerVersion;
+    function GetIsTransitive : boolean;
+
+    procedure SetBplPath(const value : string);
+
+    function GetPlatform : TDPMPlatform;
+    procedure SetVersion(const value : TPackageVersion);
     procedure SetSelectedOn(const value : TVersionRange);
     function RemoveNode(const node : IGraphNode) : boolean;
     function IsRoot : boolean;
@@ -77,19 +94,24 @@ type
     function HasChildren : boolean;
     function GetLevel : Integer;
     procedure VisitDFS(const visitor : TNodeVisitProc);
+
     procedure Prune(const id : string);
-
+    function AreEqual(const otherNode : IGraphNode; const depth : integer = 1) : boolean;
+    function GetUseSource: Boolean;
+    procedure SetUseSource(const value: Boolean);
+    function ToIdVersionString: string;
   public
-    constructor Create(const parent : IGraphNode; const id : string; const version : TPackageVersion; const selectedOn : TVersionRange);
-    constructor CreateRoot;
-
+    constructor Create(const parent : IGraphNode; const id : string; const version : TPackageVersion; const platform : TDPMPlatform; const compilerVersion : TCompilerVersion; const selectedOn : TVersionRange; const useSource : boolean);
+    constructor CreateRoot(const compilerVersion : TCompilerVersion; const platform : TDPMPlatform);
+    destructor Destroy;override;
   end;
 
 
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  DPM.Core.Constants;
 
 { TGraphNode }
 
@@ -111,16 +133,50 @@ begin
     parent := parent.Parent;
   end;
 
-  result := TGraphNode.Create(self, id, version, selectedOn);
+  result := TGraphNode.Create(self, id, version, FPlatform, FCompilerVersion, selectedOn,  FUseSource);
   FChildNodes.Add(LowerCase(id), result);
 end;
 
-constructor TGraphNode.Create(const parent : IGraphNode; const id : string; const version : TPackageVersion; const selectedOn : TVersionRange);
+function TGraphNode.AreEqual(const otherNode: IGraphNode; const depth: integer): boolean;
+var
+  childDepth : integer;
+  res : boolean;
 begin
+  result := SameText(FId, otherNode.Id);
+  result := result and (Self.FVersion = otherNode.Version);
+  
+  if (not result) or (depth = 0)  then
+    exit;
+
+  result := HasChildren = otherNode.HasChildren;
+  if not result then
+    exit;
+
+  childDepth := depth -1;
+  res := true;
+
+  FChildNodes.ForEach(
+    procedure(const pair : TPair<string, IGraphNode>)
+    var
+      otherChildNode : IGraphNode;
+    begin
+      if not res then
+        exit;
+      otherChildNode := otherNode.FindChild(pair.Value.Id);
+      res := otherChildNode <> nil;
+      if res then
+        res := pair.Value.AreEqual(otherChildNode, childDepth);
+    end);
+  result := res;
+
+end;
+
+constructor TGraphNode.Create(const parent : IGraphNode; const id : string; const version : TPackageVersion; const platform : TDPMPlatform; const compilerVersion : TCompilerVersion; const selectedOn : TVersionRange; const useSource : boolean);
+begin
+  FSearchPaths := TCollections.CreateList<string>;
   FLevel := 0;
   if parent <> nil then
   begin
-    FLevel := parent.Level + 1;
     {$IFDEF USEWEAK}
     FParent := parent;
     {$ELSE}
@@ -132,14 +188,25 @@ begin
 
   FId := id;
   FVersion := version;
+  FPlatform := platform;
   FSelectedOn := selectedOn;
+  FUseSource := useSource;
+  FChildNodes := TCollections.CreateSortedDictionary<string, IGraphNode>();
+  if FParent <> nil then
+    FCompilerVersion := parent.CompilerVersion
+  else
+    FCompilerVersion := compilerVersion;
 
-  FChildNodes := TCollections.CreateSortedDictionary < string, IGraphNode > ();
 end;
 
-constructor TGraphNode.CreateRoot;
+constructor TGraphNode.CreateRoot(const compilerVersion : TCompilerVersion; const platform : TDPMPlatform);
 begin
-  Create(nil, 'root', TPackageVersion.Empty, TVersionRange.Empty);
+  Create(nil, cRootNode, TPackageVersion.Empty, platform, compilerVersion, TVersionRange.Empty, false);
+end;
+
+destructor TGraphNode.Destroy;
+begin
+  inherited;
 end;
 
 function TGraphNode.FindChild(const id : string) : IGraphNode;
@@ -191,9 +258,20 @@ begin
     end);
 end;
 
+function TGraphNode.GetBplPath: string;
+begin
+  result := FBplPath;
+end;
+
 function TGraphNode.GetChildNodes : IEnumerable<IGraphNode>;
 begin
   result := FChildNodes.Values;
+end;
+
+
+function TGraphNode.GetCompilerVersion: TCompilerVersion;
+begin
+  result := FCompilerVersion;
 end;
 
 function TGraphNode.GetId : string;
@@ -201,9 +279,19 @@ begin
   result := FId;
 end;
 
+function TGraphNode.GetIsTransitive: boolean;
+begin
+  result := (FParent <> nil) and (not {$IFDEF USEWEAK} FParent.IsRoot {$ELSE} IGraphNode(FParent).IsRoot{$ENDIF});
+end;
+
 function TGraphNode.GetLevel : Integer;
 begin
   result := FLevel;
+end;
+
+function TGraphNode.GetLibPath: string;
+begin
+  result := FLibPath;
 end;
 
 function TGraphNode.GetParent : IGraphNode;
@@ -215,14 +303,33 @@ begin
     result := nil;
 end;
 
+function TGraphNode.GetPlatform: TDPMPlatform;
+begin
+  result := FPlatform;
+end;
+
+function TGraphNode.GetSearchPaths: IList<string>;
+begin
+  result := FSearchPaths;
+end;
+
 function TGraphNode.GetSelectedOn : TVersionRange;
 begin
   result := FSelectedOn;
 end;
 
-function TGraphNode.GetSelectedVersion : TPackageVersion;
+function TGraphNode.GetVersion : TPackageVersion;
 begin
   result := FVersion;
+end;
+
+function TGraphNode.GetUseSource: Boolean;
+var
+  parent : IGraphNode;
+begin
+  parent := GetParent;
+  //if the parent is using the source then we should too.
+  result := FUseSource or ((parent <> nil) and parent.UseSource);
 end;
 
 function TGraphNode.HasChildren : boolean;
@@ -232,12 +339,12 @@ end;
 
 function TGraphNode.IsRoot : boolean;
 begin
-  result := FParent = nil;
+  result := FId = cRootNode;
 end;
 
 function TGraphNode.IsTopLevel : boolean;
 begin
-  result := FLevel = 1;
+  result := (FParent = nil) or {$IFDEF USEWEAK} FParent.IsRoot {$ELSE} IGraphNode(FParent).IsRoot{$ENDIF};
 end;
 
 procedure TGraphNode.Prune(const id : string);
@@ -269,15 +376,36 @@ begin
     end;
 end;
 
+procedure TGraphNode.SetBplPath(const value: string);
+begin
+  FBplPath := value;
+end;
+
+procedure TGraphNode.SetLibPath(const value: string);
+begin
+  FLibPath := value;
+end;
+
 procedure TGraphNode.SetSelectedOn(const value : TVersionRange);
 begin
   FSelectedOn := value;
 end;
 
-procedure TGraphNode.SetSelectedVersion(const value : TPackageVersion);
+procedure TGraphNode.SetVersion(const value : TPackageVersion);
 begin
   FVersion := value;
 end;
+
+procedure TGraphNode.SetUseSource(const value: Boolean);
+begin
+  FUseSource := value;
+end;
+
+function TGraphNode.ToIdVersionString: string;
+begin
+  result := FId +' [' + FVersion.ToStringNoMeta + ']';
+end;
+
 
 procedure TGraphNode.VisitDFS(const visitor : TNodeVisitProc);
 var

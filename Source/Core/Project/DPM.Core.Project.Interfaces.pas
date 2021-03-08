@@ -33,45 +33,24 @@ uses
   System.Generics.Defaults,
   DPM.Core.Types,
   DPM.Core.Dependency.Version,
+  DPM.Core.Dependency.Interfaces,
   DPM.Core.Package.Interfaces;
 
 {$SCOPEDENUMS ON}
 
 type
-  //represents a package reference in the dproj
-  IPackageReference = interface(IPackageId)
-  ['{FC4548EF-A449-4E78-9D9B-C01B5BE0E389}']
-    function GetId : string;
-    function GetVersion : TPackageVersion;
-    function GetPlatform : TDPMPlatform;
-    function GetIsTransitive : boolean;
-    function GetRange : TVersionRange;
-    function GetDependencies : IList<IPackageReference>;
-    procedure SetVersion(const value : TPackageVersion);
-    function GetHasDependencies : boolean;
-
-    property Id : string read GetId;
-    property Version : TPackageVersion read GetVersion write SetVersion;
-    property Platform : TDPMPlatform read GetPlatform;
-    property Range : TVersionRange read GetRange;
-    property IsTransitive : boolean read GetIsTransitive;
-    property Dependencies : IList<IPackageReference> read GetDependencies;
-    property HasDependencies : boolean read GetHasDependencies;
-  end;
-
-
   IProjectConfiguration = interface
   ['{2A251BA1-1D1E-4D0A-95B0-BD0036A14D94}']
     function GetPlatform : TDPMPlatform;
     function GetName     : string;
     function GetOutputDir : string;
-    function GetLinkWithRuntime : boolean;
+    function GetUsesRuntimePackages : boolean;
     function GetPackages : IList<string>;
 
     property Platform   : TDPMPlatform read GetPlatform;
     property Name       : string read GetName;
     property OutputDir  : string read GetOutputDir;
-    property LinkWithRuntime : boolean read GetLinkWithRuntime;
+    property UsesRuntimePackages : boolean read GetUsesRuntimePackages;
     property Packages   : IList<string> read GetPackages;
   end;
 
@@ -84,25 +63,29 @@ type
     function GetCompilerVersion : TCompilerVersion;
     function GetPlatforms : TDPMPlatforms;
     function GetProjectVersion : string;
-    function GetPackageReferences : IList<IPackageReference>;
     function GetAppType : TAppType;
     function GetHasPackages : boolean;
+    function GetProjectFile : string;
     procedure SetCompiler(const value : TCompilerVersion);
 
     function LoadProject(const filename : string) : boolean;
     procedure Reset;
 
     function AddSearchPaths(const platform : TDPMPlatform; const searchPaths : IList<string>; const packageCacheLocation : string) : boolean;
-    procedure UpdatePackageReferences(const packageReferences : IList<IPackageReference>; const platform : TDPMPlatform);
+    procedure UpdatePackageReferences(const dependencyGraph : IGraphNode; const platform : TDPMPlatform);
+
+    function GetPackageReferences(const platform : TDPMPlatform) : IGraphNode;
+    function GetProjectConfiguration(const name : string; const platform : TDPMPlatform) : IProjectConfiguration;
+    function GetConfigNames : IReadOnlyList<string>;
 
     function SaveProject(const fileName : string = '') : boolean;
 
     property CompilerVersion : TCompilerVersion read GetCompilerVersion write SetCompiler;
     property ProjectVersion  : string read GetProjectVersion;
     property Platforms : TDPMPlatforms read GetPlatforms;
-    property PackageReferences : IList<IPackageReference> read GetPackageReferences;
     property AppType : TAppType read GetAppType;
     property HasPackages : boolean read GetHasPackages;
+    property ProjectFile : string read GetProjectFile;
 
   end;
 
@@ -114,46 +97,46 @@ type
     function ExtractProjects(const list : IList<string>) : boolean;
   end;
 
-  //just compares id's, not version!
-  TPackageRefenceComparer = class(TInterfacedObject,IEqualityComparer<IPackageReference>)
-  protected
-    function Equals(const Left, Right: IPackageReference): Boolean;reintroduce;
-    function GetHashCode(const Value: IPackageReference): Integer; reintroduce;
-  end;
+//  //just compares id's, not version!
+//  TPackageRefenceComparer = class(TInterfacedObject,IEqualityComparer<IPackageReference>)
+//  protected
+//    function Equals(const Left, Right: IPackageReference): Boolean;reintroduce;
+//    function GetHashCode(const Value: IPackageReference): Integer; reintroduce;
+//  end;
 
 
 
 implementation
 
-// For Delphi XE3 and up:
-{$IF CompilerVersion >= 24.0 }
-  {$LEGACYIFEND ON}
-{$IFEND}
+//// For Delphi XE3 and up:
+//{$IF CompilerVersion >= 24.0 }
+//  {$LEGACYIFEND ON}
+//{$IFEND}
 
 
-uses
-  {$IF CompilerVersion >= 29.0}
-  System.Hash,
-  {$IFEND}
-  System.SysUtils;
+//uses
+//  {$IF CompilerVersion >= 29.0}
+//  System.Hash,
+//  {$IFEND}
+//  System.SysUtils;
 
-{ TPackageRefenceComparer }
-
-function TPackageRefenceComparer.Equals(const Left, Right: IPackageReference): Boolean;
-begin
-  result := SameText(Left.Id, Right.Id);
-end;
-
-function TPackageRefenceComparer.GetHashCode(const Value: IPackageReference): Integer;
-var
-  s : string;
-begin
-  s := Value.Id;
-  {$IF CompilerVersion >= 29.0}
-  Result := System.Hash.THashBobJenkins.GetHashValue(s);
-  {$ELSE}
-  Result := BobJenkinsHash(PChar(s)^, SizeOf(Char) * Length(s), 0);
-  {$IFEND}
-end;
+//{ TPackageRefenceComparer }
+//
+//function TPackageRefenceComparer.Equals(const Left, Right: IPackageReference): Boolean;
+//begin
+//  result := SameText(Left.Id, Right.Id);
+//end;
+//
+//function TPackageRefenceComparer.GetHashCode(const Value: IPackageReference): Integer;
+//var
+//  s : string;
+//begin
+//  s := Value.Id;
+//  {$IF CompilerVersion >= 29.0}
+//  Result := System.Hash.THashBobJenkins.GetHashValue(s);
+//  {$ELSE}
+//  Result := BobJenkinsHash(PChar(s)^, SizeOf(Char) * Length(s), 0);
+//  {$IFEND}
+//end;
 
 end.

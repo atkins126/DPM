@@ -63,7 +63,8 @@ type
     FResolved : IDictionary<string, IResolution>;
     FOpenRequirements : IQueue<IPackageInfo>;
     FVersionCache : IDictionary<string, IList<IPackageInfo>>;
-
+    FPlatform : TDPMPlatform;
+    FCompilerVersion : TCompilerVersion;
   protected
     procedure RecordNoGood(const bad : IPackageInfo);
     function IsNoGood(const package : IPackageInfo) : boolean;
@@ -81,19 +82,18 @@ type
     function GetResolvedPackages : IList<IPackageInfo>;
     function BuildDependencyGraph : IGraphNode;
   public
-    constructor Create(const logger : ILogger; const newPackage : IPackageInfo; const projectReferences : IList<TProjectReference>);
+    constructor Create(const logger : ILogger; const newPackage : IPackageInfo; const projectReferences : IList<TProjectReference>);overload;
+    constructor Create(const logger : ILogger; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const projectReferences : IList<TProjectReference>);overload;
   end;
+
 
 implementation
 
 uses
   System.SysUtils,
+  DPM.Core.Constants,
   DPM.Core.Dependency.Graph,
   DPM.Core.Dependency.Resolution;
-
-const
-  cRoot = 'root';
-
 
   { TResolverContext }
 
@@ -126,6 +126,7 @@ var
     childNode : IGraphNode;
   begin
     childNode := parentNode.AddChildNode(package.Id, package.Version, versionRange);
+    childNode.UseSource := package.UseSource;
     for dependency in package.Dependencies do
     begin
       if not TryGetResolution(dependency.Id, resolution) then
@@ -135,20 +136,22 @@ var
   end;
 
 begin
-  result := TGraphNode.CreateRoot;
+  result := TGraphNode.CreateRoot(FCompilerVersion, FPlatform);
   toplevelPackages := FResolved.Values.Where(function(const value : IResolution) : boolean
     begin
-      result := value.ParentId = cRoot;
+      result := value.ParentId = cRootNode;
     end);
 
   for toplevelPackage in toplevelPackages do
     AddNode(result, topLevelPackage.Package, TVersionRange.Empty);
 end;
 
-constructor TResolverContext.Create(const logger : ILogger; const newPackage : IPackageInfo; const projectReferences : IList<TProjectReference>);
+constructor TResolverContext.Create(const logger: ILogger; const compilerVersion : TCompilerVersion; const platform: TDPMPlatform; const projectReferences: IList<TProjectReference>);
 var
   projectReference : TProjectReference;
 begin
+  FCompilerVersion := compilerVersion;
+  FPlatform := platform;
   FLogger := logger;
   FNoGoods := TCollections.CreateDictionary < string, IDictionary<TPackageVersion, byte> > ;
   FResolved := TCollections.CreateDictionary < string, IResolution > ;
@@ -163,12 +166,15 @@ begin
 
     RecordResolution(projectReference.Package, projectReference.VersionRange, projectReference.ParentId);
   end;
-  if newPackage <> nil then
-  begin
-    PushRequirement(newPackage);
-    RecordResolution(newPackage, TVersionRange.Empty, cRoot);
-  end;
 
+end;
+
+constructor TResolverContext.Create(const logger : ILogger; const newPackage : IPackageInfo; const projectReferences : IList<TProjectReference>);
+begin
+  Assert(newPackage <> nil);
+  Create(logger, newPackage.CompilerVersion, newPackage.Platform, projectReferences);
+  PushRequirement(newPackage);
+  RecordResolution(newPackage, TVersionRange.Empty, cRootNode);
 end;
 
 

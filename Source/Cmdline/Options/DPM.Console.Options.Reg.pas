@@ -240,6 +240,12 @@ begin
     end);
   option.HasValue := false;
 
+  option := cmd.RegisterOption<boolean>('useSource','us', 'Reference package source rather than compiling it.',
+   procedure(const value : boolean)
+    begin
+      TInstallOptions.Default.UseSource := value;
+    end);
+  option.HasValue := false;
 
 
   cmd.Examples.Add('install VSoft.CommandLine');
@@ -770,6 +776,13 @@ begin
       TUninstallOptions.Default.ProjectPath := value;
     end);
 
+  option := cmd.RegisterOption<string>('compiler','c', 'The delphi compiler version to target. ',
+   procedure(const value : string)
+    begin
+      TUninstallOptions.Default.CompilerVersion := StringToCompilerVersion(value);
+      if TUninstallOptions.Default.CompilerVersion = TCompilerVersion.UnknownVersion then
+        raise EArgumentException.Create('Invalid compiler version : ' + value);
+    end);
 
   option := cmd.RegisterOption<string>('platforms','p', 'The platforms to install for (comma separated). Default is to install for all platforms the project targets.',
    procedure(const value : string)
