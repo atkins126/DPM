@@ -47,6 +47,7 @@ uses
   VSoft.Awaitable,
   DPM.IDE.Types,
   DPM.IDE.IconCache,
+  DPM.IDE.Options,
   DPM.Core.Types,
   DPM.Core.Logging,
   DPM.Core.Dependency.Interfaces,
@@ -126,6 +127,8 @@ type
     FConfiguration : IConfiguration;
     FConfigIsLocal : boolean;
 
+    FDPMIDEOptions : IDPMIDEOptions;
+
     //RS IDE Stuff
     FProjectGroup : IOTAProjectGroup;
     FProject : IOTAProject;
@@ -197,7 +200,8 @@ type
 
     //IPackageSearcher
     function GetSearchOptions : TSearchOptions;
-    function SearchForPackages(const options : TSearchOptions) : IAwaitable<IList<IPackageSearchResultItem>>;
+    function SearchForPackagesAsync(const options : TSearchOptions) : IAwaitable<IList<IPackageSearchResultItem>>;
+    function SearchForPackages(const options : TSearchOptions) : IList<IPackageSearchResultItem>;
     function GetCurrentPlatform : string;
     procedure PackageInstalled(const package : IPackageSearchResultItem);
     procedure PackageUninstalled(const package : IPackageSearchResultItem);
@@ -287,7 +291,7 @@ var
   bReload : boolean;
   optionsHost : TDPMOptionsHostForm;
 begin
-  optionsHost := TDPMOptionsHostForm.Create(Self, FConfigurationManager, FLogger, FSearchOptions.ConfigFile);
+  optionsHost := TDPMOptionsHostForm.Create(Self, FConfigurationManager, FLogger, FDPMIDEOptions, FSearchOptions.ConfigFile);
   try
     bReload := optionsHost.ShowModal = mrOk;
   finally
@@ -369,7 +373,7 @@ begin
   FRowLayout.RowWidth := -1;
 
   FCurrentTab := TCurrentTab.Installed;
-
+  PackageDetailsFrame.Configure(FCurrentTab, chkIncludePrerelease.Checked);
   FProjectGroup := nil;
   FProject := nil;
   FCurrentPlatform := TDPMPlatform.UnknownPlatform;
@@ -1151,7 +1155,7 @@ begin
   result := FSearchOptions.Clone;
 end;
 
-function TDPMEditViewFrame.SearchForPackages(const options : TSearchOptions) : IAwaitable<IList<IPackageSearchResultItem>>;
+function TDPMEditViewFrame.SearchForPackagesAsync(const options : TSearchOptions) : IAwaitable<IList<IPackageSearchResultItem>>;
 var
   repoManager : IPackageRepositoryManager;
 begin
@@ -1166,6 +1170,16 @@ begin
     end, FCancelTokenSource.Token);
 
 end;
+
+
+function TDPMEditViewFrame.SearchForPackages(const options : TSearchOptions) : IList<IPackageSearchResultItem>;
+var
+  repoManager : IPackageRepositoryManager;
+begin
+  repoManager := FContainer.Resolve<IPackageRepositoryManager>;
+  result := repoManager.GetPackageFeed(FCancelTokenSource.Token, options, FConfiguration);
+end;
+
 
 procedure TDPMEditViewFrame.SwitchedToConflicts(const refresh : boolean);
 begin
@@ -1307,7 +1321,7 @@ begin
     FSearchOptions.Commercial := chkIncludeCommercial.Checked;
     FSearchOptions.Trial := chkIncludeTrial.Checked;
     FSearchOptions.Platforms := [FCurrentPlatform];
-    SearchForPackages(FSearchOptions)
+    SearchForPackagesAsync(FSearchOptions)
     .OnException(
       procedure(const e : Exception)
       begin
@@ -1449,7 +1463,7 @@ begin
   end;
 
   FLogger := FContainer.Resolve<IDPMIDELogger>;
-
+  FDPMIDEOptions := FContainer.Resolve<IDPMIDEOptions>;
   //if there is a project specific config file then that is what we should use.
   sConfigFile := IncludeTrailingPathDelimiter(ExtractFilePath(projectOrGroup.FileName)) + cDPMConfigFileName;
   if FileExists(sConfigFile) then

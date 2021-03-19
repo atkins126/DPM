@@ -30,7 +30,8 @@ type
   IPackageSearcher = interface
     ['{4FBB9E7E-886A-4B7D-89FF-FA5DBC9D93FD}']
     function GetSearchOptions : TSearchOptions;
-    function SearchForPackages(const options : TSearchOptions) : IAwaitable<IList<IPackageSearchResultItem>>;
+    function SearchForPackagesAsync(const options : TSearchOptions) : IAwaitable<IList<IPackageSearchResultItem>>;overload;
+    function SearchForPackages(const options : TSearchOptions) : IList<IPackageSearchResultItem>;overload;
     function GetCurrentPlatform : string;
     procedure SaveBeforeChange;
     procedure PackageInstalled(const package : IPackageSearchResultItem);
@@ -116,8 +117,12 @@ procedure TPackageDetailsFrame.btnInstallOrUpdateClick(Sender : TObject);
 var
   packageInstaller : IPackageInstaller;
   options : TInstallOptions;
+  installResult : boolean;
+  newVersion : TPackageVersion;
+  sVersion : string;
 begin
   btnInstallOrUpdate.Enabled := false;
+  installResult := false;
   try
     if FRequestInFlight then
       FCancellationTokenSource.Cancel;
@@ -126,17 +131,38 @@ begin
       Application.ProcessMessages;
     FCancellationTokenSource.Reset;
     FLogger.Clear;
+    FLogger.StartInstall(FCancellationTokenSource);
     FPackageSearcher.SaveBeforeChange;
-    FLogger.ShowMessageTab;
-    FLogger.Information('Installing package ' + FPackageMetaData.Id + ' - ' + FPackageMetaData.Version + ' [' + FPackageSearcher.GetCurrentPlatform + ']');
+
+    if btnInstallOrUpdate.Caption = 'Update' then
+    begin
+      //get the version from the current item.
+      sVersion := cboVersions.Items[cboVersions.ItemIndex];
+      if TStringUtils.StartsWith(sVersion, cLatestPrerelease, true) then
+        Delete(sVersion, 1, Length(cLatestPrerelease))
+      else if TStringUtils.StartsWith(sVersion, cLatestStable, true) then
+        Delete(sVersion, 1, Length(cLatestStable));
+      newVersion := TPackageVersion.Parse(sVersion);
+    end
+    else
+      newVersion := TPackageVersion.Parse(FPackageMetaData.Version);
+
+
+    FLogger.Information('Installing package ' + FPackageMetaData.Id + ' - ' + newVersion.ToString + ' [' + FPackageSearcher.GetCurrentPlatform + ']');
+
 
     options := TInstallOptions.Create;
     options.ConfigFile := FConfiguration.FileName;
     options.PackageId := FPackageMetaData.Id;
-    options.Version := TPackageVersion.Parse(FPackageMetaData.Version);
+    options.Version := newVersion;
     options.ProjectPath := FProjectFile;
     options.Platforms := [ProjectPlatformToDPMPlatform(FPackageSearcher.GetCurrentPlatform)];
     options.Prerelease := FIncludePreRelease;
+    options.CompilerVersion := IDECompilerVersion;
+
+    //make sure we have the correct metadata for the new version
+    FPackageMetaData := FPackageSearcher.SearchForPackages(options).FirstOrDefault;
+
 
     //install will fail if a package is already installed, unless you specify force.
     if btnInstallOrUpdate.Caption = 'Update' then
@@ -144,20 +170,22 @@ begin
 
     packageInstaller := FContainer.Resolve<IPackageInstaller>;
 
-    if packageInstaller.Install(FCancellationTokenSource.Token, options) then
+    installResult := packageInstaller.Install(FCancellationTokenSource.Token, options);
+    if installResult then
     begin
       FPackageMetaData.InstalledVersion := FPackageMetaData.Version;
       FPackageMetaData.Installed := true;
       FPackageInstalledVersion := FPackageMetaData.InstalledVersion;
-      FLogger.Information('Package ' + FPackageMetaData.Id + ' - ' + FPackageMetaData.Version + ' [' + FPackageSearcher.GetCurrentPlatform + '] installed.');
+      FLogger.Information('Package ' + FPackageMetaData.Id + ' - ' + newVersion.ToString + ' [' + FPackageSearcher.GetCurrentPlatform + '] installed.');
       FPackageSearcher.PackageInstalled(FPackageMetaData);
       SetPackage(FPackageMetaData);
     end
     else
-      FLogger.Error('Package ' + FPackageMetaData.Id + ' - ' + FPackageMetaData.Version + ' [' + FPackageSearcher.GetCurrentPlatform + '] did not install.');
+      FLogger.Error('Package ' + FPackageMetaData.Id + ' - ' + newVersion.ToString + ' [' + FPackageSearcher.GetCurrentPlatform + '] did not install.');
 
   finally
     btnInstallOrUpdate.Enabled := true;
+    FLogger.EndInstall(installResult);
   end;
 
 
@@ -168,8 +196,10 @@ procedure TPackageDetailsFrame.btnUninstallClick(Sender : TObject);
 var
   packageInstaller : IPackageInstaller;
   options : TUnInstallOptions;
+  uninstallResult : boolean;
 begin
   btnUninstall.Enabled := false;
+  uninstallResult := false;
   try
     if FRequestInFlight then
       FCancellationTokenSource.Cancel;
@@ -178,8 +208,8 @@ begin
       Application.ProcessMessages;
     FCancellationTokenSource.Reset;
     FLogger.Clear;
+    FLogger.StartUnInstall(FCancellationTokenSource);
     FPackageSearcher.SaveBeforeChange;
-    FLogger.ShowMessageTab;
     FLogger.Information('UnInstalling package ' + FPackageMetaData.Id + ' - ' + FPackageMetaData.Version + ' [' + FPackageSearcher.GetCurrentPlatform + ']');
 
     options := TUnInstallOptions.Create;
@@ -191,7 +221,8 @@ begin
 
     packageInstaller := FContainer.Resolve<IPackageInstaller>;
 
-    if packageInstaller.UnInstall(FCancellationTokenSource.Token, options) then
+    uninstallResult := packageInstaller.UnInstall(FCancellationTokenSource.Token, options);
+    if uninstallResult then
     begin
       FPackageMetaData.InstalledVersion := FPackageMetaData.Version;
       FPackageMetaData.Installed := true;
@@ -205,8 +236,8 @@ begin
 
   finally
     btnUninstall.Enabled := true;
+    FLogger.EndUnInstall(uninstallResult);
   end;
-
 end;
 
 procedure TPackageDetailsFrame.cboVersionsChange(Sender : TObject);
@@ -229,7 +260,7 @@ begin
   searchOptions.Commercial := true;
   searchOptions.Trial := true;
 
-  FPackageSearcher.SearchForPackages(searchOptions)
+  FPackageSearcher.SearchForPackagesAsync(searchOptions)
   .OnException(
     procedure(const e : Exception)
     begin
@@ -419,7 +450,7 @@ begin
       bFetchVersions := true;
       FPackageId := package.Id;
       if package.Installed then
-        FPackageInstalledVersion := package.Version
+        FPackageInstalledVersion := package.InstalledVersion
       else
         FPackageInstalledVersion := '';
     end
@@ -456,11 +487,10 @@ begin
     else
       imgPackageLogo.Visible := false;
 
-    pnlInstalled.Visible := FPackageInstalledVersion <> '';
-
     case FCurrentTab of
       TCurrentTab.Search :
         begin
+          pnlInstalled.Visible := FPackageInstalledVersion <> '';
           if pnlInstalled.Visible then
           begin
             btnInstallOrUpdate.Caption := 'Update'
@@ -472,10 +502,12 @@ begin
         end;
       TCurrentTab.Installed :
         begin
+          pnlInstalled.Visible := true;
           btnInstallOrUpdate.Caption := 'Update';
         end;
       TCurrentTab.Updates :
         begin
+          pnlInstalled.Visible := true;
           btnInstallOrUpdate.Caption := 'Update';
         end;
       TCurrentTab.Conflicts : ;
@@ -560,6 +592,7 @@ var
   lStable : string;
   lPre : string;
   sVersion : string;
+  sInstalledVersion : string;
 begin
   FVersionsDelayTimer.Enabled := false;
   if FRequestInFlight then
@@ -568,15 +601,23 @@ begin
     Application.ProcessMessages;
   FCancellationTokenSource.Reset;
 
+  cboVersions.Clear;
   repoManager := FContainer.Resolve<IPackageRepositoryManager>;
+
   options := TSearchOptions.Create;
   options.CompilerVersion := IDECompilerVersion;
   options.AllVersions := true;
   options.SearchTerms := FPackageMetaData.Id;
-  options.Prerelease := FIncludePreRelease;
+  if FCurrentTab = TCurrentTab.Installed then
+    options.Prerelease := true //should this be checking the package meta data version for pre-release?
+  else
+    options.Prerelease := FIncludePreRelease;
+
   options.Platforms := [FCurrentPlatform];
 
   config := FConfiguration;
+
+  sInstalledVersion := FPackageInstalledVersion;
 
   TAsync.Configure < IList<TPackageVersion> > (
     function(const cancelToken : ICancellationToken) : IList<TPackageVersion>
@@ -645,15 +686,19 @@ begin
             cboVersions.Items.AddObject(lPre, TObject(1));
           for version in versions do
             cboVersions.Items.Add(version.ToStringNoMeta);
-          cboVersions.ItemIndex := 0;
 
-          sVersion := cboVersions.Items[0];
+          if FCurrentTab = TCurrentTab.Installed then
+            cboVersions.ItemIndex := cboVersions.Items.IndexOf(sInstalledVersion)
+          else
+            cboVersions.ItemIndex := 0;
+
+          sVersion := cboVersions.Items[cboVersions.ItemIndex];
           if TStringUtils.StartsWith(sVersion, cLatestPrerelease, true) then
             Delete(sVersion, 1, Length(cLatestPrerelease))
           else if TStringUtils.StartsWith(sVersion, cLatestStable, true) then
             Delete(sVersion, 1, Length(cLatestStable));
 
-          btnInstallOrUpdate.Enabled := sVersion <> FPackageInstalledVersion;
+          btnInstallOrUpdate.Enabled := sVersion <> sInstalledVersion;
         end;
       finally
         cboVersions.Items.EndUpdate;
