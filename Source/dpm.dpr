@@ -1,8 +1,8 @@
-{***************************************************************************}
+ï»¿{***************************************************************************}
 {                                                                           }
 {           Delphi Package Manager - DPM                                    }
 {                                                                           }
-{           Copyright © 2019 Vincent Parrett and contributors               }
+{           Copyright ï¿½ 2019 Vincent Parrett and contributors               }
 {                                                                           }
 {           vincent@finalbuilder.com                                        }
 {           https://www.finalbuilder.com                                    }
@@ -36,7 +36,6 @@ uses
   WinApi.ActiveX,
   DPM.Console.Types in 'Cmdline\DPM.Console.Types.pas',
   DPM.Console.Reg in 'Cmdline\DPM.Console.Reg.pas',
-  DPM.Console.Utils in 'Cmdline\DPM.Console.Utils.pas',
   DPM.Console.Application in 'Cmdline\DPM.Console.Application.pas',
   DPM.Console.Banner in 'Cmdline\DPM.Console.Banner.pas',
   DPM.Console.Options in 'Cmdline\Options\DPM.Console.Options.pas',
@@ -67,7 +66,6 @@ uses
   DPM.Console.Command.Why in 'Cmdline\Commands\DPM.Console.Command.Why.pas',
   DPM.Console.Command.Add in 'Cmdline\Commands\DPM.Console.Command.Add.pas',
   DPM.Console.Command.Cache in 'Cmdline\Commands\DPM.Console.Command.Cache.pas',
-  DPM.Console.Command.Feed in 'Cmdline\Commands\DPM.Console.Command.Feed.pas',
   DPM.Core.Cache.Interfaces in 'Core\Cache\DPM.Core.Cache.Interfaces.pas',
   DPM.Core.Cache in 'Core\Cache\DPM.Core.Cache.pas',
   DPM.Core.Compiler.EnvironmentProvider in 'Core\Compiler\DPM.Core.Compiler.EnvironmentProvider.pas',
@@ -80,7 +78,6 @@ uses
   DPM.Core.Dependency.Context in 'Core\Dependency\DPM.Core.Dependency.Context.pas',
   DPM.Core.Dependency.Graph in 'Core\Dependency\DPM.Core.Dependency.Graph.pas',
   DPM.Core.Dependency.Interfaces in 'Core\Dependency\DPM.Core.Dependency.Interfaces.pas',
-  DPM.Core.Dependency.LockFile in 'Core\Dependency\DPM.Core.Dependency.LockFile.pas',
   DPM.Core.Dependency.Resolution in 'Core\Dependency\DPM.Core.Dependency.Resolution.pas',
   DPM.Core.Dependency.Resolver in 'Core\Dependency\DPM.Core.Dependency.Resolver.pas',
   DPM.Core.Dependency.Version in 'Core\Dependency\DPM.Core.Dependency.Version.pas',
@@ -89,7 +86,6 @@ uses
   DPM.Core.Options.Cache in 'Core\Options\DPM.Core.Options.Cache.pas',
   DPM.Core.Options.Common in 'Core\Options\DPM.Core.Options.Common.pas',
   DPM.Core.Options.Config in 'Core\Options\DPM.Core.Options.Config.pas',
-  DPM.Core.Options.Feed in 'Core\Options\DPM.Core.Options.Feed.pas',
   DPM.Core.Options.Install in 'Core\Options\DPM.Core.Options.Install.pas',
   DPM.Core.Options.List in 'Core\Options\DPM.Core.Options.List.pas',
   DPM.Core.Options.Pack in 'Core\Options\DPM.Core.Options.Pack.pas',
@@ -104,7 +100,6 @@ uses
   DPM.Core.Package.InstallerContext in 'Core\Package\DPM.Core.Package.InstallerContext.pas',
   DPM.Core.Package.Interfaces in 'Core\Package\DPM.Core.Package.Interfaces.pas',
   DPM.Core.Package.Metadata in 'Core\Package\DPM.Core.Package.Metadata.pas',
-  DPM.Core.Package.SearchPath in 'Core\Package\DPM.Core.Package.SearchPath.pas',
   DPM.Core.Package.SearchResults in 'Core\Package\DPM.Core.Package.SearchResults.pas',
   DPM.Core.Packaging.Archive in 'Core\Packaging\DPM.Core.Packaging.Archive.pas',
   DPM.Core.Packaging.Archive.Reader in 'Core\Packaging\DPM.Core.Packaging.Archive.Reader.pas',
@@ -117,19 +112,13 @@ uses
   DPM.Core.Project.GroupProjReader in 'Core\Project\DPM.Core.Project.GroupProjReader.pas',
   DPM.Core.Project.Interfaces in 'Core\Project\DPM.Core.Project.Interfaces.pas',
   DPM.Core.Repository.Base in 'Core\Repository\DPM.Core.Repository.Base.pas',
-  DPM.Core.Repository.BaseGithub in 'Core\Repository\DPM.Core.Repository.BaseGithub.pas',
   DPM.Core.Repository.Directory in 'Core\Repository\DPM.Core.Repository.Directory.pas',
-  DPM.Core.Repository.DNGithub in 'Core\Repository\DPM.Core.Repository.DNGithub.pas',
-  DPM.Core.Repository.DPMGithub in 'Core\Repository\DPM.Core.Repository.DPMGithub.pas',
   DPM.Core.Repository.Factory in 'Core\Repository\DPM.Core.Repository.Factory.pas',
   DPM.Core.Repository.Http in 'Core\Repository\DPM.Core.Repository.Http.pas',
   DPM.Core.Repository.Interfaces in 'Core\Repository\DPM.Core.Repository.Interfaces.pas',
   DPM.Core.Repository.Manager in 'Core\Repository\DPM.Core.Repository.Manager.pas',
-  DPM.Core.Sources.ClientFactory in 'Core\Sources\DPM.Core.Sources.ClientFactory.pas',
   DPM.Core.Sources.Interfaces in 'Core\Sources\DPM.Core.Sources.Interfaces.pas',
-  DPM.Core.Sources.LocalClient in 'Core\Sources\DPM.Core.Sources.LocalClient.pas',
   DPM.Core.Sources.Manager in 'Core\Sources\DPM.Core.Sources.Manager.pas',
-  DPM.Core.Sources.RemoteClient in 'Core\Sources\DPM.Core.Sources.RemoteClient.pas',
   DPM.Core.Sources.Types in 'Core\Sources\DPM.Core.Sources.Types.pas',
   DPM.Core.Spec.BPLEntry in 'Core\Spec\DPM.Core.Spec.BPLEntry.pas',
   DPM.Core.Spec.BuildEntry in 'Core\Spec\DPM.Core.Spec.BuildEntry.pas',
@@ -162,25 +151,16 @@ uses
   DPM.Core.Init in 'Core\DPM.Core.Init.pas',
   DPM.Core.TargetPlatform in 'Core\DPM.Core.TargetPlatform.pas',
   DPM.Core.Types in 'Core\DPM.Core.Types.pas',
-  SVGInterfaces in 'SVG\SVGInterfaces.pas',
-  SVGBase64 in 'SVG\SVGBase64.pas',
-  SVGParse in 'SVG\SVGParse.pas',
-  SVG in 'SVG\SVG.pas',
-  SVGStyle in 'SVG\SVGStyle.pas',
-  SVGCommon in 'SVG\SVGCommon.pas',
-  SVGTypes in 'SVG\SVGTypes.pas',
-  SVGPath in 'SVG\SVGPath.pas',
-  XmlLite in 'SVG\XmlLite.pas',
-  SVGPaint in 'SVG\SVGPaint.pas',
-  PasSVGFactory in 'SVG\PasSVGFactory.pas',
-  GDIPKerning in 'SVG\GDIPKerning.pas',
-  GDIPOBJ2 in 'SVG\GDIPOBJ2.pas',
-  GDIPPathText in 'SVG\GDIPPathText.pas',
-  SVGColor in 'SVG\SVGColor.pas',
   DPM.Core.Package.Icon in 'Core\Package\DPM.Core.Package.Icon.pas',
   DPM.Core.Compiler.BOM in 'Core\Compiler\DPM.Core.Compiler.BOM.pas',
   DPM.Core.Compiler.ProjectSettings in 'Core\Compiler\DPM.Core.Compiler.ProjectSettings.pas',
-  DPM.Core.Utils.Files in 'Core\Utils\DPM.Core.Utils.Files.pas';
+  DPM.Core.Utils.Files in 'Core\Utils\DPM.Core.Utils.Files.pas',
+  DPM.Core.Package.Installer.Interfaces in 'Core\Package\DPM.Core.Package.Installer.Interfaces.pas',
+  DPM.Console.Command.Info in 'Cmdline\Commands\DPM.Console.Command.Info.pas',
+  DPM.Core.Options.Info in 'Core\Options\DPM.Core.Options.Info.pas',
+  DPM.Core.Sources.ServiceIndex in 'Core\Sources\DPM.Core.Sources.ServiceIndex.pas',
+  DPM.Core.Package.ListItem in 'Core\Package\DPM.Core.Package.ListItem.pas',
+  DPM.Core.Package.PackageLatestVersionInfo in 'Core\Package\DPM.Core.Package.PackageLatestVersionInfo.pas';
 
 begin
   CoInitializeEx(nil, COINIT_MULTITHREADED); //needed for msxml

@@ -75,8 +75,10 @@ const
   //version
   cPackageFileRegexV = '^(\w+\.\w+)\-([^\-]+)\-([^\-]+)\-(%s)$';
 
+  cGroupNode = 'group-node';
   cRootNode = 'root-node';
-
+  cUserAgentHeader = 'User-Agent';
+  cDPMUserAgent = 'DPM ' + cDPMClientVersion;
 
 implementation
 

@@ -42,13 +42,13 @@ type
     FCompilerVersion : TCompilerVersion;
     FPlatforms : TDPMPlatforms;
     FVersion : TPackageVersion;
-    FAllVersions : boolean;
     FPrerelease : boolean;
     FCommercial : boolean;
     FTrial : boolean;
     FIncludeDelisted : boolean;
     FForce : boolean;
     FUseSource : boolean;
+    FDebugMode : boolean;
   protected
     FExact : boolean;
     constructor CreateClone(const original : TSearchOptions); reintroduce;
@@ -56,7 +56,6 @@ type
   public
     constructor Create; override;
     function Clone : TSearchOptions; virtual;
-    property AllVersions : boolean read FAllVersions write FAllVersions;
     property Prerelease : boolean read FPrerelease write FPrerelease;
     property Commercial : boolean read FCommercial write FCommercial;
     property Trial : boolean read FTrial write FTrial;
@@ -73,6 +72,7 @@ type
     property Exact : boolean read FExact write FExact; //search term is a package id.
     property Force : boolean read FForce write FForce; //needed by the package installer.
     property UseSource : boolean read FUseSource write FUseSource; //only used by install but we need it here.
+    property DebugMode : boolean read FDebugMode write FDebugMode;
 
   end;
 
@@ -83,6 +83,7 @@ implementation
 function TSearchOptions.Clone : TSearchOptions;
 begin
   result := TSearchOptions.CreateClone(Self);
+  result.FUseSource := FUseSource;
 end;
 
 constructor TSearchOptions.Create;
@@ -106,9 +107,12 @@ begin
   FCompilerVersion := original.FCompilerVersion;
   FPlatforms := original.FPlatforms;
   FVersion := original.FVersion;
-  FAllVersions := original.FAllVersions;
   FPrerelease := original.FPrerelease;
   FIncludeDelisted := original.FIncludeDelisted;
+  FUseSource := original.UseSource;
+  FDebugMode := original.DebugMode;
+  FTrial := original.Trial;
+  FCommercial := original.Commercial;
 end;
 
 end.

@@ -282,8 +282,10 @@ begin
   begin
     if isUnc then
       basePath := '\\' + basePath;
-    if not StartsWith(result, basePath) then
-      exit(path);
+      //TODO : this is bogus, because a ..\ could change this
+      // it was added for copylocal so need to test that.
+//    if not StartsWith(result, basePath) then
+//      exit(path);
   end;
 end;
 
@@ -297,7 +299,9 @@ end;
 
 class function TPathUtils.IsRelativePath(const value : string) : boolean;
 begin
-  result := (not TPath.IsUNCPath(value) and TStringUtils.StartsWith(value, '.\')) or System.SysUtils.IsRelativePath(value);
+//why did we need this. System.SysUtils.IsRelativePath seems to work for XE2+
+//  result := (not TPath.IsUNCPath(value) and TStringUtils.StartsWith(value, '.\')) or System.SysUtils.IsRelativePath(value);
+  result := System.SysUtils.IsRelativePath(value);
 end;
 
 class function TPathUtils.QuotePath(const value: string; const force : boolean = false): string;

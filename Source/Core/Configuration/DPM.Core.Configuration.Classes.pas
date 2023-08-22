@@ -92,6 +92,7 @@ type
     procedure SetPackageCacheLocation(const value : string);
     function GetIsDefaultPackageCacheLocation : Boolean;
     procedure AddDefaultSources;
+    function GetSourceByName(const name : string) : ISourceConfig;
 
     function LoadFromFile(const fileName : string) : boolean;
     function SaveToFile(const fileName : string) : boolean;
@@ -241,15 +242,12 @@ begin
     //it might not have been set before, so we need to figure it out.
     if TUriFactory.TryParse(FSource, false, uri) then
     begin
-      if uri.Scheme <> 'file' then
+      if (uri.Scheme <> 'file') then
       begin
         if (uri.Scheme = 'http') or (uri.Scheme = 'https') then
-        begin
-          if uri.Host = 'api.github.com' then
-            FSourceType := TSourceType.DPMGithub
-          else
-            FSourceType := TSourceType.DPMServer;
-        end;
+            FSourceType := TSourceType.DPMServer
+        else
+          raise EArgumentOutOfRangeException.Create('Invalid Source uri scheme - only https or file supported. ');
       end;
     end;
   end;
@@ -314,9 +312,7 @@ procedure TConfiguration.AddDefaultSources;
 var
   source : ISourceConfig;
 begin
-  source := TSourceConfig.Create('DPMGithub', 'https://api.github.com', TSourceType.DPMGithub, 'Set Password to github access token', '', false);
-  FSources.Add(source);
-  source := TSourceConfig.Create('DNGithub', 'https://api.github.com', TSourceType.DNGithub, 'Set Password to github access token', '', false);
+  source := TSourceConfig.Create('DPM', 'https://delphi.dev/api/v1/index.json', TSourceType.DPMServer, '', '', true);
   FSources.Add(source);
 end;
 
@@ -342,6 +338,18 @@ end;
 function TConfiguration.GetPackageCacheLocation : string;
 begin
   result := FPackageCacheLocation;
+end;
+
+function TConfiguration.GetSourceByName(const name: string): ISourceConfig;
+var
+  sourceConfig : ISourceConfig;
+begin
+  result := nil;
+  for sourceConfig in FSources do
+  begin
+    if SameText(sourceConfig.Name, name) then
+      exit(sourceConfig);
+  end;
 end;
 
 function TConfiguration.GetSources : IList<ISourceConfig>;
@@ -383,22 +391,33 @@ begin
   FPackageCacheLocation := jsonObj['packageCacheLocation'];
   sourcesArray := jsonObj.A['packageSources'];
 
+  bResult := false;
   for i := 0 to sourcesArray.Count - 1 do
   begin
     source := TSourceConfig.Create(FLogger);
     bResult := source.LoadFromJson(sourcesArray.O[i]);
     if bResult then
     begin
-      if not FSources.Any(function(const item : ISourceConfig) : boolean
+      if not FSources.Any(
+        function(const item : ISourceConfig) : boolean
         begin
           result := SameText(item.Name, source.Name);
         end) then
-      begin
-        FSources.Add(source);
-      end;
+        begin
+          FSources.Add(source);
+        end;
+    end;
+  end;
+
+  if not FSources.Any(
+    function(const item : ISourceConfig) : boolean
+    begin
+      result := SameText(item.Name, 'DPM')
+    end) then
+    begin
+      AddDefaultSources;
     end;
     result := result and bResult;
-  end;
 end;
 
 function TConfiguration.SaveToFile(const fileName : string) : boolean;

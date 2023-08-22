@@ -80,13 +80,17 @@ uses
   DPM.Core.Types,
   DPM.Core.Logging,
   DPM.Core.Init,
+  DPM.Core.Utils.Config,
+  DPM.Core.Package.Interfaces,
+  DPM.Core.Package.Installer.Interfaces,
   DPM.IDE.ProjectController,
   DPM.IDE.ProjectStorageNotifier,
   DPM.IDE.IDENotifier,
   DPM.IDE.ProjectMenu,
-  DPM.Core.Package.Interfaces,
   DPM.IDE.AddInOptions,
-  DPM.IDE.Options;
+  DPM.IDE.Options,
+  DPM.IDE.InstallerContext,
+  DPM.IDE.DesignManager;
 
 {$R DPM.IDE.Resources.res}
 { TDPMWizard }
@@ -101,13 +105,19 @@ begin
     FContainer.RegisterType<IDPMProjectTreeManager, TDPMProjectTreeManager>.AsSingleton();
     FContainer.RegisterType<IDPMEditorViewManager, TDPMEditorViewManager>.AsSingleton();
     FContainer.RegisterType<IDPMIDEProjectController,TDPMIDEProjectController>.AsSingleton();
+    FContainer.RegisterType<IDPMIDEDesignManager,TDPMIDEDesignManager>.AsSingleton();
 
-    DPM.Core.Init.InitCore(FContainer);
+    DPM.Core.Init.InitCore(FContainer,
+      //replaces core registration of the IPackageInstallerContext implementation
+      procedure(const container : TContainer)
+      begin
+        container.RegisterType<IPackageInstallerContext, TDPMIDEPackageInstallerContext>().AsSingleton();
+      end);
     FContainer.Build;
   except
     on e : Exception do
     begin
-
+     FLogger.Error('Error setting up the container : ' + e.Message);
     end;
   end;
 end;
@@ -138,7 +148,10 @@ begin
   if FileExists(dpmIDEOptions.FileName) then
     dpmIDEOptions.LoadFromFile()
   else
+  begin
+    TConfigUtils.EnsureDefaultConfigDir;
     dpmIDEOptions.SaveToFile(); //create the file
+  end;
 
   FLogger.Verbosity := dpmIDEOptions.LogVerbosity;
 
@@ -174,7 +187,6 @@ end;
 
 procedure TDPMWizard.Destroyed;
 begin
-  FEditorViewManager.Destroyed; //don't try to resolve this here, errors in the rtl on 10.2
   if FStorageNotifierId > -1 then
     (BorlandIDEServices as IOTAProjectFileStorage).RemoveNotifier(FStorageNotifierId);
   if FIDENotifier > -1 then
@@ -189,6 +201,8 @@ begin
   {$IFEND}
 
   FDPMIDEMessageService.ShutDown;
+  FEditorViewManager.Destroyed; //don't try to resolve this here, errors in the rtl on 10.2
+  FEditorViewManager := nil;
 
 end;
 

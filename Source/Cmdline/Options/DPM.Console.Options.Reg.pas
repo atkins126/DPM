@@ -43,7 +43,6 @@ uses
   DPM.Core.Options.Config,
   DPM.Core.Options.Install,
   DPM.Core.Options.List,
-  DPM.Core.Options.Feed,
   DPM.Core.Options.Pack,
   DPM.Core.Options.Push,
   DPM.Core.Options.Sources,
@@ -124,8 +123,7 @@ begin
         TCacheOptions.Default.Sources := TCacheOptions.Default.Sources +',' + value;
     end);
   option.AllowMultiple := true;
-
-end;
+  end;
 
 
 procedure RegisterDeleteCommand;
@@ -240,6 +238,14 @@ begin
     end);
   option.HasValue := false;
 
+  option := cmd.RegisterOption<boolean>('upgrade','', 'Set when installing a different version',
+   procedure(const value : boolean)
+    begin
+      TInstallOptions.Default.IsUpgrade := value;
+    end);
+  option.HasValue := false;
+
+
   option := cmd.RegisterOption<boolean>('useSource','us', 'Reference package source rather than compiling it.',
    procedure(const value : boolean)
     begin
@@ -247,6 +253,12 @@ begin
     end);
   option.HasValue := false;
 
+  option := cmd.RegisterOption<boolean>('debugMode','dm', 'Compile Debug configuration.',
+  procedure(const value : boolean)
+    begin
+      TInstallOptions.Default.DebugMode := value;
+    end);
+  option.HasValue := false;
 
   cmd.Examples.Add('install VSoft.CommandLine');
   cmd.Examples.Add('install VSoft.CommandLine -version=1.0.1 c:\myprojects\project1.dproj');
@@ -281,13 +293,6 @@ begin
         TListOptions.Default.Sources := TListOptions.Default.Sources +',' + value;
     end);
   option.AllowMultiple := true;
-
-  option := cmd.RegisterOption<boolean>('allVersions','a','List all versions of a package. By default, only the latest package version is displayed.',
-    procedure(const value : boolean)
-    begin
-      TListOptions.Default.AllVersions := value;
-    end);
-  option.HasValue := false;
 
   option := cmd.RegisterOption<boolean>('exact','e','Search for exact package id match.',
     procedure(const value : boolean)
@@ -348,100 +353,100 @@ begin
 
 end;
 
-procedure RegisterFeedCommand;
-var
-  option : IOptionDefinition;
-  cmd : TCommandDefinition;
-begin
-  cmd := TOptionsRegistry.RegisterCommand('feed', 'f', 'Displays a list of packages from a given source. If no sources are specified, all sources ' +
-                                                        'defined in %AppData%\DPM\DPM.config are used. If DPM.config specifies no sources, ' +
-                                                        'uses the default DPM feed.',
-                                                        'Specify optional search term.',
-                                                        'list [search term] [options]');
-
-
-  option := cmd.RegisterUnNamedOption<string>('Specify optional search terms','searchTerms',
-    procedure(const value : string)
-    begin
-      TFeedOptions.Default.SearchTerms := value;
-    end);
-
-
-  option := cmd.RegisterOption<string>('source','s','The source from which to list packages',
-    procedure(const value : string)
-    begin
-      if TFeedOptions.Default.Sources = '' then
-        TFeedOptions.Default.Sources := value
-      else
-        TFeedOptions.Default.Sources := TFeedOptions.Default.Sources +',' + value;
-    end);
-  option.AllowMultiple := true;
-
-  option := cmd.RegisterOption<boolean>('allVersions','a','List all versions of a package. By default, only the latest package version is displayed.',
-    procedure(const value : boolean)
-    begin
-      TFeedOptions.Default.AllVersions := value;
-    end);
-  option.HasValue := false;
-
-  option := cmd.RegisterOption<boolean>('exact','e','Search for exact package id match.',
-    procedure(const value : boolean)
-    begin
-      TFeedOptions.Default.Exact := value;
-    end);
-  option.HasValue := false;
-
-  option := cmd.RegisterOption<boolean>('prerelease','pr','Allow prerelease packages to be shown.',
-    procedure(const value : boolean)
-    begin
-      TFeedOptions.Default.Prerelease := value;
-    end);
-  option.HasValue := false;
-
-  option := cmd.RegisterOption<boolean>('includeDelisted','d','Allow delisted packages to be shown.',
-    procedure(const value : boolean)
-    begin
-      TFeedOptions.Default.IncludeDelisted := value;
-    end);
-  option.HasValue := false;
-
-  option := cmd.RegisterOption<integer>('skip','','Skip over x results before listing.',
-    procedure(const value : integer)
-    begin
-      TFeedOptions.Default.Skip := value;;
-    end);
-
-  option := cmd.RegisterOption<integer>('take','','Take max x results.',
-    procedure(const value : integer)
-    begin
-      TFeedOptions.Default.Take := value;;
-    end);
-
-  option := cmd.RegisterOption<string>('compiler','c','Compiler version. When not specified, all compiler versions found are listed.',
-    procedure(const value : string)
-    begin
-      TFeedOptions.Default.CompilerVersion := StringToCompilerVersion(value);
-      if TFeedOptions.Default.CompilerVersion = TCompilerVersion.UnknownVersion then
-        raise EArgumentException.Create('Invalid compiler version : ' + value);
-
-
-    end);
-
-  option := cmd.RegisterOption<TDPMPlatforms>('platforms','p','Target platforms, comma separated. When not specified, all platforms found are listed.',
-    procedure(const value : TDPMPlatforms)
-    begin
-      TFeedOptions.Default.Platforms := value;
-    end);
-
-
-  cmd.Examples.Add('list "commandline"');
-
-  cmd.Examples.Add('list "semantic" -prerelease -skip=10 -take=10');
-
-  cmd.Examples.Add('list "commandline" -compiler=10.2 -platforms=Win32,Win63,OSX32 -source=VSoftInternal -prerelease');
-
-
-end;
+//procedure RegisterFeedCommand;
+//var
+//  option : IOptionDefinition;
+//  cmd : TCommandDefinition;
+//begin
+//  cmd := TOptionsRegistry.RegisterCommand('feed', 'f', 'Displays a list of packages from a given source. If no sources are specified, all sources ' +
+//                                                        'defined in %AppData%\DPM\DPM.config are used. If DPM.config specifies no sources, ' +
+//                                                        'uses the default DPM feed.',
+//                                                        'Specify optional search term.',
+//                                                        'list [search term] [options]');
+//
+//
+//  option := cmd.RegisterUnNamedOption<string>('Specify optional search terms','searchTerms',
+//    procedure(const value : string)
+//    begin
+//      TFeedOptions.Default.SearchTerms := value;
+//    end);
+//
+//
+//  option := cmd.RegisterOption<string>('source','s','The source from which to list packages',
+//    procedure(const value : string)
+//    begin
+//      if TFeedOptions.Default.Sources = '' then
+//        TFeedOptions.Default.Sources := value
+//      else
+//        TFeedOptions.Default.Sources := TFeedOptions.Default.Sources +',' + value;
+//    end);
+//  option.AllowMultiple := true;
+//
+//  option := cmd.RegisterOption<boolean>('allVersions','a','List all versions of a package. By default, only the latest package version is displayed.',
+//    procedure(const value : boolean)
+//    begin
+//      TFeedOptions.Default.AllVersions := value;
+//    end);
+//  option.HasValue := false;
+//
+//  option := cmd.RegisterOption<boolean>('exact','e','Search for exact package id match.',
+//    procedure(const value : boolean)
+//    begin
+//      TFeedOptions.Default.Exact := value;
+//    end);
+//  option.HasValue := false;
+//
+//  option := cmd.RegisterOption<boolean>('prerelease','pr','Allow prerelease packages to be shown.',
+//    procedure(const value : boolean)
+//    begin
+//      TFeedOptions.Default.Prerelease := value;
+//    end);
+//  option.HasValue := false;
+//
+//  option := cmd.RegisterOption<boolean>('includeDelisted','d','Allow delisted packages to be shown.',
+//    procedure(const value : boolean)
+//    begin
+//      TFeedOptions.Default.IncludeDelisted := value;
+//    end);
+//  option.HasValue := false;
+//
+//  option := cmd.RegisterOption<integer>('skip','','Skip over x results before listing.',
+//    procedure(const value : integer)
+//    begin
+//      TFeedOptions.Default.Skip := value;;
+//    end);
+//
+//  option := cmd.RegisterOption<integer>('take','','Take max x results.',
+//    procedure(const value : integer)
+//    begin
+//      TFeedOptions.Default.Take := value;;
+//    end);
+//
+//  option := cmd.RegisterOption<string>('compiler','c','Compiler version. When not specified, all compiler versions found are listed.',
+//    procedure(const value : string)
+//    begin
+//      TFeedOptions.Default.CompilerVersion := StringToCompilerVersion(value);
+//      if TFeedOptions.Default.CompilerVersion = TCompilerVersion.UnknownVersion then
+//        raise EArgumentException.Create('Invalid compiler version : ' + value);
+//
+//
+//    end);
+//
+//  option := cmd.RegisterOption<TDPMPlatforms>('platforms','p','Target platforms, comma separated. When not specified, all platforms found are listed.',
+//    procedure(const value : TDPMPlatforms)
+//    begin
+//      TFeedOptions.Default.Platforms := value;
+//    end);
+//
+//
+//  cmd.Examples.Add('list "commandline"');
+//
+//  cmd.Examples.Add('list "semantic" -prerelease -skip=10 -take=10');
+//
+//  cmd.Examples.Add('list "commandline" -compiler=10.2 -platforms=Win32,Win63,OSX32 -source=VSoftInternal -prerelease');
+//
+//
+//end;
 
 
 
@@ -589,6 +594,14 @@ begin
       if TRestoreOptions.Default.CompilerVersion = TCompilerVersion.UnknownVersion then
         raise EArgumentException.Create('Invalid compiler version : ' + value);
     end);
+
+  option := cmd.RegisterOption<boolean>('debugMode','dm', 'Compile Debug configuration.',
+  procedure(const value : boolean)
+    begin
+      TRestoreOptions.Default.DebugMode := value;
+    end);
+  option.HasValue := false;
+
 
 
 
@@ -823,6 +836,18 @@ begin
 
 end;
 
+procedure RegisterInfoCommand;
+var
+  cmd : TCommandDefinition;
+begin
+
+  cmd := TOptionsRegistry.RegisterCommand('info', '', 'Show info about dpm config',
+                                                      '',
+                                                      'info',true);
+
+end;
+
+
 
 procedure RegisterOptions;
 var
@@ -865,10 +890,6 @@ begin
   RegisterHelpCommand;
   RegisterInstallCommand;
   RegisterListCommand;
-  {$IFDEF DEBUG}
-  //this is just for testing.
-  RegisterFeedCommand;
-  {$ENDIF}
   RegisterPackCommand;
   RegisterPushCommand;
   RegisterUninstallCommand;
@@ -881,6 +902,7 @@ begin
   RegisterVerifyCommand;
   RegisterWhyCommand;
   RegisterExitCodesCommand;
+  RegisterInfoCommand;
 
 end;
 

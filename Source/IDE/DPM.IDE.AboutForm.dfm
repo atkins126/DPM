@@ -12,9 +12,7 @@ object DPMAboutForm: TDPMAboutForm
   Font.Height = -11
   Font.Name = 'Tahoma'
   Font.Style = []
-  OldCreateOrder = False
   Position = poMainFormCenter
-  PixelsPerInch = 96
   TextHeight = 13
   object Image1: TImage
     Left = 8
@@ -105,14 +103,21 @@ object DPMAboutForm: TDPMAboutForm
   end
   object Label4: TLabel
     Left = 72
-    Top = 144
+    Top = 168
     Width = 244
     Height = 13
     Caption = 'TODO  - Add attribution for whatever icons we use'
   end
-  object githubLinkLabel: TLinkLabel
+  object lblVersion: TLabel
     Left = 72
     Top = 104
+    Width = 45
+    Height = 13
+    Caption = 'Version : '
+  end
+  object githubLinkLabel: TLinkLabel
+    Left = 72
+    Top = 128
     Width = 266
     Height = 19
     Caption = 

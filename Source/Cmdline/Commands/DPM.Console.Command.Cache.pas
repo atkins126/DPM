@@ -29,12 +29,13 @@ unit DPM.Console.Command.Cache;
 interface
 
 uses
-  VSoft.Awaitable,
+  VSoft.CancellationToken,
   DPM.Core.Configuration.Interfaces,
   DPM.Core.Logging,
   DPM.Core.Package.Interfaces,
   DPM.Console.ExitCodes,
-  DPM.Console.Command.Base;
+  DPM.Console.Command.Base,
+  DPM.Core.Package.Installer.Interfaces;
 
 type
   TCacheCommand = class(TBaseCommand)

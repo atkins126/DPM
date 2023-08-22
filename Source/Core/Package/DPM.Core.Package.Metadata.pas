@@ -30,6 +30,7 @@ interface
 
 uses
   Spring.Collections,
+  JsonDataObjects,
   DPM.Core.Types,
   DPM.Core.Logging,
   DPM.Core.Package.Interfaces,
@@ -58,15 +59,15 @@ type
   TPackageIdentity = class(TPackageId, IPackageIdentity, IPackageId)
   private
     FSourceName : string;
-    FProjectUrl : string;
   protected
-    function GetProjectUrl : string;
     function GetSourceName : string;
     constructor Create(const sourceName : string; const spec : IPackageSpec); overload; virtual;
+    constructor Create(const sourceName : string; const jsonObj : TJsonObject);overload;virtual;
   public
-    constructor Create(const id, source : string; const version : TPackageVersion; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const projectUrl : string); overload; virtual;
+    constructor Create(const sourceName : string; const id : string; const version : TPackageVersion; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform); overload; virtual;
     class function TryCreateFromString(const logger : ILogger; const value : string; const source : string; out packageIdentity : IPackageIdentity) : boolean;
     class function CreateFromSpec(const sourceName : string; const spec : IPackageSpec) : IPackageIdentity;
+    class function TryLoadFromJson(const logger : ILogger; const jsonObj : TJsonObject; const source : string; out packageIdentity : IPackageIdentity) : boolean;
   end;
 
   TPackageInfo = class(TPackageIdentity, IPackageInfo, IPackageIdentity, IPackageId)
@@ -78,8 +79,10 @@ type
     function GetUseSource : boolean;
     procedure SetUseSource(const value : boolean);
     constructor Create(const sourceName : string; const spec : IPackageSpec); override;
+    constructor Create(const sourceName : string; const jsonObj : TJsonObject);override;
   public
     class function CreateFromSpec(const sourceName : string; const spec : IPackageSpec) : IPackageInfo;
+    class function TryLoadFromJson(const logger : ILogger; const jsonObj : TJsonObject; const source : string; out packageInfo : IPackageInfo) : boolean;
   end;
 
   TPackageMetadata = class(TPackageInfo, IPackageMetadata, IPackageInfo, IPackageIdentity, IPackageId)
@@ -92,7 +95,12 @@ type
     FIsTrial : Boolean;
     FLicense : string;
     FTags : string;
-    FSearchPaths : IList<IPackageSearchPath>;
+    FSearchPaths : IList<string>;
+    FProjectUrl : string;
+    FRepositoryUrl : string;
+    FRepositoryType : string;
+    FRepositoryBranch : string;
+    FRepositoryCommit : string;
   protected
     function GetAuthors : string;
     function GetCopyright : string;
@@ -102,10 +110,17 @@ type
     function GetIsTrial : Boolean;
     function GetLicense : string;
     function GetTags : string;
-    function GetSearchPaths : IList<IPackageSearchPath>;
-    constructor Create(const sourceName : string; const spec : IPackageSpec); reintroduce;
+    function GetSearchPaths : IList<string>;
+    function GetProjectUrl : string;
+    function GetRepositoryUrl: string;
+    function GetRepositoryType : string;
+    function GetRepositoryBranch : string;
+    function GetRepositoryCommit : string;
+    constructor Create(const sourceName : string; const spec : IPackageSpec); override;
   public
+    constructor Create(const sourceName : string; const jsonObj : TJsonObject); override;
     class function CreateFromSpec(const sourceName : string; const spec : IPackageSpec) : IPackageMetadata;
+    class function TryLoadFromJson(const logger : ILogger; const jsonObj : TJsonObject; const source : string; out packageMetadata : IPackageMetadata) : boolean;
   end;
 
 
@@ -127,18 +142,47 @@ implementation
 uses
   DPM.Core.Constants,
   DPM.Core.Spec.Reader,
-  DPM.Core.Package.SearchPath,
   DPM.Core.Package.Dependency,
   System.SysUtils,
   System.RegularExpressions,
-  System.Zip;
+  System.Zip,
+  System.Classes;
 
 { TPackageMetadata }
 
-constructor TPackageIdentity.Create(const id, source : string; const version : TPackageVersion; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const projectUrl : string);
+
+constructor TPackageIdentity.Create(const sourceName: string; const jsonObj: TJsonObject);
+var
+  id : string;
+  stmp : string;
+  cv : TCompilerVersion;
+  platform : TDPMPlatform;
+  packageVersion : TPackageVersion;
+begin
+  id := jsonObj.S['id'];
+  stmp := jsonObj.S['compiler'];
+  cv := StringToCompilerVersion(stmp);
+  if cv = TCompilerVersion.UnknownVersion then
+    raise Exception.Create('Compiler segment is not a valid version [' + stmp+ ']');
+  stmp := jsonObj.S['platform'];
+  platform := StringToDPMPlatform(stmp);
+  if platform = TDPMPlatform.UnknownPlatform then
+    raise Exception.Create('Platform is not a valid platform [' + stmp+ ']');
+
+  stmp := jsonObj.S['version'];
+  if not TPackageVersion.TryParse(stmp, packageVersion) then
+    raise Exception.Create('Version is not a valid version [' + stmp + ']');
+
+  inherited Create(id, packageVersion, cv, platform);
+  FSourceName := sourceName;
+
+
+end;
+
+constructor TPackageIdentity.Create(const sourceName : string; const id: string; const version: TPackageVersion; const compilerVersion: TCompilerVersion; const platform: TDPMPlatform);
 begin
   inherited Create(id, version, compilerVersion, platform);
-  FSourceName := source;
+  FSourceName := sourceName;
 end;
 
 class function TPackageIdentity.CreateFromSpec(const sourceName : string; const spec : IPackageSpec) : IPackageIdentity;
@@ -152,14 +196,26 @@ begin
   FSourceName := sourceName;
 end;
 
-function TPackageIdentity.GetProjectUrl : string;
-begin
-  result := FProjectUrl;
-end;
 
 function TPackageIdentity.GetSourceName : string;
 begin
   result := FSourceName;
+end;
+
+class function TPackageIdentity.TryLoadFromJson(const logger : ILogger; const jsonObj : TJsonObject; const source : string; out packageIdentity : IPackageIdentity) : boolean;
+begin
+  result := false;
+  try
+    packageIdentity := TPackageIdentity.Create(source, jsonObj);
+  except
+    on e : Exception do
+    begin
+      logger.Error(e.Message);
+      exit
+    end;
+  end;
+  result := true;
+
 end;
 
 class function TPackageIdentity.TryCreateFromString(const logger : ILogger; const value : string; const source : string; out packageIdentity : IPackageIdentity) : boolean;
@@ -196,8 +252,7 @@ begin
     exit;
   end;
 
-  //we dont' have a source.
-  packageIdentity := TPackageIdentity.Create(id, '', packageVersion, cv, platform, '');
+  packageIdentity := TPackageIdentity.Create(source, id,  packageVersion, cv, platform);
   result := true;
 
 
@@ -218,6 +273,36 @@ begin
   begin
     newDep := TPackageDependency.Create(dep.Id, dep.Version, FPlatform);
     FDependencies.Add(newDep);
+  end;
+
+end;
+
+
+constructor TPackageInfo.Create(const sourceName: string; const jsonObj: TJsonObject);
+var
+  depArr : TJsonArray;
+  depId : string;
+  depVersion : string;
+  i: Integer;
+  range : TVersionRange;
+  dependency : IPackageDependency;
+begin
+  inherited Create(sourceName, jsonObj);
+  FDependencies := TCollections.CreateList<IPackageDependency>;
+  //check for isnull is needed due to jd barfing on nulls
+  if jsonObj.Contains('dependencies') and (not jsonObj.IsNull('dependencies')) then
+  begin
+    depArr := jsonObj.A['dependencies'];
+    for i := 0 to depArr.Count -1 do
+    begin
+      depId := depArr.O[i].S['packageId'];
+      depVersion := depArr.O[i].S['versionRange'];
+      if TVersionRange.TryParse(depVersion, range) then
+      begin
+        dependency := TPackageDependency.Create(depId, range, FPlatform);
+        FDependencies.Add(dependency);
+      end;
+    end;
   end;
 
 end;
@@ -243,15 +328,29 @@ begin
   FUseSource := value;
 end;
 
+class function TPackageInfo.TryLoadFromJson(const logger: ILogger; const jsonObj: TJsonObject; const source: string; out packageInfo: IPackageInfo): boolean;
+begin
+  result := false;
+  try
+    packageInfo := TPackageInfo.Create(source, jsonObj);
+  except
+    on e : Exception do
+    begin
+      logger.Error(e.Message);
+      exit;
+    end;
+  end;
+  result := true;
+end;
+
 { TPackageMetadataFull }
 
 constructor TPackageMetadata.Create(const sourceName : string; const spec : IPackageSpec);
 var
   specSearchPath : ISpecSearchPath;
-  searchPath : IPackageSearchPath;
 begin
   inherited Create(sourceName, spec);
-  FSearchPaths := TCollections.CreateList<IPackageSearchPath>;
+  FSearchPaths := TCollections.CreateList<string>;
   FAuthors := spec.MetaData.Authors;
   FCopyright := spec.MetaData.Copyright;
   FDescription := spec.MetaData.Description;
@@ -261,11 +360,54 @@ begin
   FLicense := spec.MetaData.License;
   FProjectUrl := spec.MetaData.ProjectUrl;
   FTags := spec.MetaData.Tags;
+  FProjectUrl := spec.MetaData.ProjectUrl;
+  FRepositoryUrl := spec.MetaData.RepositoryUrl;
+  FRepositoryType := spec.MetaData.RepositoryType;
+  FRepositoryBranch := spec.MetaData.RepositoryBranch;
+  FRepositoryCommit := spec.MetaData.RepositoryCommit;
 
   for specSearchPath in spec.TargetPlatform.SearchPaths do
+    FSearchPaths.Add(specSearchPath.Path);
+end;
+
+
+constructor TPackageMetadata.Create(const sourceName: string; const jsonObj: TJsonObject);
+var
+  searchPaths : string;
+  sList : TStringList;
+  i: Integer;
+begin
+  inherited Create(sourceName, jsonObj);
+  FSearchPaths := TCollections.CreateList<string>;
+
+  FAuthors        := jsonObj.S['authors'];;
+  FCopyright      := jsonObj.S['copyright'];
+  FDescription    := jsonObj.S['description'];
+  FIcon           := jsonObj.S['icon'];
+  FIsCommercial   := jsonObj.B['isCommercial'];
+  FIsTrial        := jsonObj.B['isTrial'];
+  FLicense        := jsonObj.S['License'];
+  FProjectUrl     := jsonObj.S['ProjectUrl'];
+  FTags           := jsonObj.S['Tags'];
+  FProjectUrl     := jsonObj.S['ProjectUrl'];
+  FRepositoryUrl  := jsonObj.S['RepositoryUrl'];
+  FRepositoryType := jsonObj.S['RepositoryType'];
+  FRepositoryBranch := jsonObj.S['RepositoryBranch'];
+  FRepositoryCommit := jsonObj.S['RepositoryCommit'];
+  FRepositoryCommit := jsonObj.S['RepositoryCommit'];
+  searchPaths       := jsonObj.S['searchPaths'];
+
+  if searchPaths <> '' then
   begin
-    searchPath := TPackageSearchPath.Create(specSearchPath.Path);
-    FSearchPaths.Add(searchPath);
+    sList := TStringList.Create;
+    try
+      sList.Delimiter := ';';
+      sList.DelimitedText := searchPaths;
+      for i := 0 to sList.Count -1 do
+        FSearchPaths.Add(sList.Strings[i]);
+    finally
+      sList.Free;
+    end;
   end;
 end;
 
@@ -309,7 +451,32 @@ begin
   result := FLicense;
 end;
 
-function TPackageMetadata.GetSearchPaths : IList<IPackageSearchPath>;
+function TPackageMetadata.GetProjectUrl: string;
+begin
+  result := FProjectUrl;
+end;
+
+function TPackageMetadata.GetRepositoryBranch: string;
+begin
+  result := FRepositoryBranch;
+end;
+
+function TPackageMetadata.GetRepositoryCommit: string;
+begin
+  result := FRepositoryCommit;
+end;
+
+function TPackageMetadata.GetRepositoryType: string;
+begin
+  result := FRepositoryBranch;
+end;
+
+function TPackageMetadata.GetRepositoryUrl: string;
+begin
+  result := FRepositoryUrl;
+end;
+
+function TPackageMetadata.GetSearchPaths : IList<string>;
 begin
   result := FSearchPaths;
 end;
@@ -317,6 +484,22 @@ end;
 function TPackageMetadata.GetTags : string;
 begin
   result := FTags;
+end;
+
+class function TPackageMetadata.TryLoadFromJson(const logger: ILogger; const jsonObj: TJsonObject; const source: string; out packageMetadata: IPackageMetadata): boolean;
+begin
+  result := false;
+  try
+    packageMetadata := TPackageMetadata.Create(source, jsonObj);
+  except
+    on e : Exception do
+    begin
+      logger.Error(e.Message);
+      exit;
+
+    end;
+  end;
+  result := true;
 end;
 
 { TPackageMetadataExtractor }
@@ -358,7 +541,7 @@ begin
     exit;
   end;
   //we dont' have a source.
-  identity := TPackageIdentity.Create(id, '', packageVersion, cv, platform, '');
+  identity := TPackageIdentity.Create(id, source, packageVersion, cv, platform);
   result := true;
 end;
 
@@ -471,5 +654,8 @@ begin
   result := FId + '-' + CompilerToString(FCompilerVersion) + '-' + DPMPlatformToString(FPlatform) + '-' + FVersion.ToStringNoMeta;
 end;
 
+
+//initialization
+//  JsonSerializationConfig.NullConvertsToValueTypes := true;
 end.
 

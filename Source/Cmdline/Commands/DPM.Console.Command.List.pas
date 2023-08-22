@@ -29,7 +29,7 @@ unit DPM.Console.Command.List;
 interface
 
 uses
-  VSoft.Awaitable,
+  VSoft.CancellationToken,
   DPM.Console.ExitCodes,
   DPM.Console.Command.Base,
   DPM.Core.Logging,
@@ -51,6 +51,7 @@ implementation
 uses
   Spring.Collections,
   DPM.Core.Types,
+  DPM.Core.Utils.Strings,
   DPM.Core.Options.Common,
   DPM.Core.Options.List,
   DPM.Core.Package.Interfaces;
@@ -65,10 +66,10 @@ end;
 
 function TListCommand.Execute(const cancellationToken : ICancellationToken) : TExitCode;
 var
-  searchResults : IList<IPackageIdentity>;
-  info, prevInfo : IPackageIdentity;
+  searchResults : IList<IPackageListItem>;
+  item : IPackageListItem;
   resultString : string;
-
+  config : IConfiguration;
 begin
   result := TExitCode.Error;
   TListOptions.Default.ApplyCommon(TCommonOptions.Default);
@@ -78,41 +79,35 @@ begin
     exit;
   end;
 
+  if TListOptions.Default.ConfigFile = '' then
+  begin
+    result := TExitCode.InvalidArguments;
+    exit;
+  end;
+
+  TListOptions.Default.Take := MaxInt;
+
+  config := FConfigurationManager.LoadConfig(TListOptions.Default.ConfigFile);
+  if config = nil then
+    exit(TExitCode.InitException);
+  FRepositoryManager.Initialize(config);
+
   searchResults := FRepositoryManager.List(cancellationToken, TListOptions.Default);
+  //TODO : re-implement this
   if searchResults.Any then
   begin
-    prevInfo := nil;
-    resultString := '';
     //group by id+version+compiler, collect platforms
-    for info in searchResults do
+    for item in searchResults do
     begin
       if cancellationToken.IsCancelled then
         exit;
-
-      if (prevInfo = nil) then
-      begin
-        prevInfo := info;
-        resultString := info.Id  + '-' + info.Version.ToString + '-' + CompilerToString(info.CompilerVersion) +  ' [' + DPMPlatformToString(info.Platform);
-        continue;
-      end;
-      if (info.Id <> prevInfo.Id) or (info.CompilerVersion <> prevInfo.CompilerVersion) or (info.Version <> prevInfo.Version) then
-      begin
-        Logger.Information(resultString + ']');
-        resultString := '';
-        resultString := info.Id + '-' + info.Version.ToString + '-' + CompilerToString(info.CompilerVersion) +  ' [' + DPMPlatformToString(info.Platform);
-      end
-      else
-        //different platform.
-         resultString := resultString +',' + DPMPlatformToString(info.Platform);
-      prevInfo := info;
+      resultString := TStringUtils.PadRight(item.Id, 24) + #9+'v'  + TStringUtils.PadRight(item.Version.ToString, 15) + ' [Delphi '  + CompilerToString(item.CompilerVersion) +  ' - ' + item.Platforms + ']';
+      Logger.Information(resultString);
     end;
-    if resultString <> '' then
-      Logger.Information(resultString + ']');
-     result := TExitCode.OK;
+    result := TExitCode.OK;
   end
   else
     Logger.Information('No packages were found');
-
 
 end;
 

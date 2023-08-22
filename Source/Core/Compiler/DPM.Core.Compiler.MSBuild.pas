@@ -115,11 +115,19 @@ begin
   FCompilerLogFile := TPath.GetTempFileName;
   FProjectFile := projectFile;
 
-  commandLine := GetCommandLine(projectFile, configName, packageVersion);
+  try
+    commandLine := GetCommandLine(projectFile, configName, packageVersion);
+  except
+    on e : Exception do
+    begin
+      FLogger.Error('Error generating command line : ' + e.Message);
+      exit;
+    end;
+  end;
 
   env := TEnvironmentBlockFactory.Create(nil, true);
-  //THE IDE set these, which makes it difficult to debug the command line version.
   {$IFDEF DEBUG}
+  //THE IDE set these, which makes it difficult to debug the command line version.
   env.RemoveVariable('BDS');
   env.RemoveVariable('BDSLIB');
   env.RemoveVariable('BDSINCLUDE');
@@ -128,7 +136,7 @@ begin
   env.RemoveVariable('PLATFORM');
   //envoptions causes problems on our build machines, haven't figured out why yet.
   env.AddOrSet('ImportEnvOptions','false');
-  FLogger.Verbose('Compler - cmdline : ' + commandLine,false);
+  FLogger.Debug('Compler - cmdline : ' + commandLine);
   try
     result := TProcess.Execute2(cancellationToken, 'cmd.exe', commandLine,'',env) = 0;
   except
@@ -144,6 +152,7 @@ begin
   begin
     if not result then
     begin
+      FLogger.Error('Package compilation failed.');
       FCompilerOutput.LoadFromFile(FCompilerLogFile);
       //TODO : This should be logged as an error, but then you would get a wall of red text which is hard to read.
       FLogger.Information(FCompilerOutput.Text);
@@ -184,7 +193,7 @@ begin
   //I don't like this... but it will do for a start.
 
   result := 'call "' + FEnv.GetRsVarsFilePath(FCompilerVersion) + '"';
-  result := result + '& msbuild "' + projectfile + '" ' + GetMSBuildParameters(configName, packageVersion);
+  result := result + ' & msbuild "' + projectfile + '" ' + GetMSBuildParameters(configName, packageVersion);
   result := ' cmd /c ' + result + ' > ' + FCompilerLogFile;
 end;
 
@@ -256,7 +265,7 @@ begin
 
   result := result + ' /p:DCC_UnitSearchPath=' +  GetProjectSearchPath(configName);
 
- // result := result +  ' /v:diag';
+  //result := result +  ' /v:diag';
  end;
 
 
@@ -300,8 +309,9 @@ begin
   if s <> '' then
     result := s + ';' + result;
 
-  result := TPathUtils.QuotePath(result, true);
+  FLogger.Debug('SearchPath : ' + result);
 
+  result := TPathUtils.QuotePath(result, true);
 end;
 
 function TMSBuildCompiler.GetSearchPaths : IList<string>;

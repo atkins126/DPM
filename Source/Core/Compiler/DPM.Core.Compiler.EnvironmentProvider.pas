@@ -44,8 +44,8 @@ type
       TStatus = (unknown, found, notfound);
   private
     FLogger : ILogger;
-    FFound : array[TCompilerVersion.UnknownVersion..TCompilerVersion.RS10_4] of TStatus;
-    FRsVarFiles : array[TCompilerVersion.UnknownVersion..TCompilerVersion.RS10_4] of string;
+    FFound : array[TCompilerVersion.UnknownVersion..TCompilerVersion.RS11_0] of TStatus;
+    FRsVarFiles : array[TCompilerVersion.UnknownVersion..TCompilerVersion.RS11_0] of string;
   protected
     function FoundCompilerInfo(const compilerVersion : TCompilerVersion) : Boolean;
     function GetRsVarsFilePath(const compilerVersion : TCompilerVersion) : string;
@@ -113,14 +113,16 @@ begin
             begin
               FLogger.Error('Unable to find install location for compiler [' + CompilerToString(compilerVersion) + ']');
               FFound[compilerVersion] := TStatus.notfound;
-              exit;
+              raise Exception.Create('Unable to find install location for compiler [' + CompilerToString(compilerVersion) + ']');
+//              exit;
             end;
           end
           else
           begin
             FLogger.Error('Unable to find install location for compiler [' + CompilerToString(compilerVersion) + ']');
             FFound[compilerVersion] := TStatus.notfound;
-            exit;
+            raise Exception.Create('Unable to find install location for compiler [' + CompilerToString(compilerVersion) + ']');
+  //          exit;
           end;
         finally
           reg.Free;

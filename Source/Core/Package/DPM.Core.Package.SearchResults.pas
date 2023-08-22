@@ -6,53 +6,17 @@ uses
   Spring.Collections,
   JsonDataObjects,
   DPM.Core.Types,
+  DPM.Core.Dependency.Version,
+  DPM.Core.Spec.Interfaces,
   DPM.Core.Package.Interfaces;
 
 type
-  TDPMPackagePlatformDependencies = class(TInterfacedObject, IPackagePlatformDependencies)
-  private
-    FDependencies : IList<IPackageDependency>;
-    FPlatform : TDPMPlatform;
-  protected
-    function GetDependencies : IList<IPackageDependency>;
-    function GetPlatform : TDPMPlatform;
-  public
-    constructor Create(const platform : TDPMPlatform; const dependencies : IList<IPackageDependency>);
-  end;
-
-
-  TDPMPackageVersionResult = class(TInterfacedObject, IPackageVersionResult)
-  private
-    FDependencies : IList<IPackagePlatformDependencies>;
-    FPlatforms : TDPMPlatforms;
-    FVersion : string;
-  protected
-    function GetDependencies : IList<IPackagePlatformDependencies>;
-    function GetPlatforms : TDPMPlatforms;
-    function GetVersion : string;
-  public
-    constructor Create(const version : string; const platforms : TDPMPlatforms; const dependencies : IList<IPackagePlatformDependencies>);
-  end;
-
-  TDPMPackageVersionsResults = class(TInterfacedObject, IPackageVersionsResults)
-  private
-    FId : string;
-    FResults : IList<IPackageVersionResult>;
-  protected
-    function GetId : string;
-    function GetResults : IList<IPackageVersionResult>;
-  public
-    constructor Create(const id : string; const results : IList<IPackageVersionResult>);
-  end;
-
-
   TDPMPackageSearchResultItem = class(TInterfacedObject, IPackageSearchResultItem)
   private
     FIsError : boolean;
     FAuthors : string;
-    FOwners : string;
     FCopyright : string;
-    FDependencies : IList<IPackagePlatformDependencies>;
+    FDependencies : IList<IPackageDependency>;
     FDescription : string;
     FIcon : string;
     FId : string;
@@ -60,23 +24,32 @@ type
     FIsTrial : Boolean;
     FIsTransitive : boolean;
     FLicense : string;
-    FPlatforms : TDPMPlatforms;
+    FPlatform : TDPMPlatform;
+    FCompilerVersion : TCompilerVersion;
     FProjectUrl : string;
+    FRepositoryUrl : string;
+    FRepositoryType : string;
+    FRepositoryBranch : string;
+    FRepositoryCommit : string;
     FReportUrl : string;
     FTags : string;
-    FVersion : string;
+
+    FVersion : TPackageVersion;
+    FLatestVersion : TPackageVersion;
+    FLatestStableVersion : TPackageVersion;
+    FVersionRange : TVersionRange;
+
+
 
     FDownloadCount : Int64;
     FInstalled : boolean;
-    FInstalledVersion : string;
     FIsReservedPrefix : boolean;
     FSourceName : string;
     FPublishedDate : string;
   protected
     function GetAuthors : string;
-    function GetOwners : string;
     function GetCopyright : string;
-    function GetDependencies : IList<IPackagePlatformDependencies>;
+    function GetDependencies : IList<IPackageDependency>;
     function GetDescription : string;
     function GetIcon : string;
     function GetId : string;
@@ -84,99 +57,76 @@ type
     function GetPublishedDate : string;
     function GetReportUrl : string;
     function GetInstalled : Boolean;
-    function GetInstalledVersion : string;
+    function GetLatestVersion : TPackageVersion;
+    function GetLatestStableVersion : TPackageVersion;
     function GetIsReservedPrefix : Boolean;
 
     function GetIsCommercial : Boolean;
     function GetIsTrial : Boolean;
     function GetLicense : string;
-    function GetPlatforms : TDPMPlatforms;
+    function GetPlatform : TDPMPlatform;
+    function GetCompilerVersion : TCompilerVersion;
     function GetProjectUrl : string;
+    function GetRepositoryUrl : string;
+    function GetRepositoryType : string;
+    function GetRepositoryBranch : string;
+    function GetRepositoryCommit : string;
     function GetTags : string;
-    function GetVersion : string;
+    function GetVersion : TPackageVersion;
     function GetDownloadCount : Int64;
     function GetSourceName : string;
     function GetIsError : boolean;
     function GetIsTransitive : Boolean;
+    function GetIsLatestVersion : boolean;
+    function GetIsLatestStableVersion : boolean;
+    function GetIsStableVersion : boolean;
+    function GetVersionRange : TVersionRange;
 
+    function ToIdVersionString : string;
+
+    procedure SetVersion(const value : TPackageVersion);
     procedure SetPublishedDate(const value : string);
+    procedure SetRepositoryUrl(const value : string);
+    procedure SetRepositoryType(const value : string);
+    procedure SetRepositoryBranch(const value : string);
+    procedure SetRepositoryCommit(const value : string);
     procedure SetReportUrl(const value : string);
     procedure SetInstalled(const value : Boolean);
-    procedure SetInstalledVersion(const value : string);
+    procedure SetLatestVersion(const value : TPackageVersion);
+    procedure SetLatestStableVersion(const value : TPackageVersion);
     procedure SetIsTransitive(const value : Boolean);
-
+    procedure SetVersionRange(const value : TVersionRange);
     constructor CreateFromJson(const sourceName : string; const jsonObject : TJsonObject);
-    constructor CreateFromMetaData(const sourceName : string; const metaData : IPackageMetadata; const platforms : TDPMPlatforms; const dependencies : IList<IPackagePlatformDependencies>);
+    constructor CreateFromMetaData(const sourceName : string; const metaData : IPackageMetadata);
     constructor CreateFromError(const id : string; const version : TPackageVersion; const errorDescription : string);
+
   public
     class function FromJson(const sourceName : string; const jsonObject : TJsonObject) : IPackageSearchResultItem;
-    class function FromMetaData(const sourceName : string; const metaData : IPackageMetadata; const platforms : TDPMPlatforms; const dependencies : IList<IPackagePlatformDependencies>) : IPackageSearchResultItem;
+    class function FromMetaData(const sourceName : string; const metaData : IPackageMetadata) : IPackageSearchResultItem;
     class function FromError(const id : string; const version : TPackageVersion; const errorDescription : string) : IPackageSearchResultItem;
+  end;
+
+  TDPMPackageSearchResult = class(TInterfacedObject, IPackageSearchResult)
+  private
+    FSkip : Int64;
+    FTotalCount : Int64;
+    FResults : IList<IPackageSearchResultItem>;
+  protected
+    function GetResults: IList<IPackageSearchResultItem>;
+    function GetTotalCount: Int64;
+    function GetSkip: Int64;
+    procedure SetSkip(const value : Int64);
+    procedure SetTotalCount(const value : Int64);
+  public
+    constructor Create(const skip : Int64; const total : Int64);
   end;
 
 
 implementation
 
-{ TDPMPackagePlatformDependencies }
-
-constructor TDPMPackagePlatformDependencies.Create(const platform : TDPMPlatform; const dependencies : IList<IPackageDependency>);
-begin
-  FPlatform := platform;
-  FDependencies := TCollections.CreateList<IPackageDependency>;
-  FDependencies.AddRange(dependencies);
-end;
-
-function TDPMPackagePlatformDependencies.GetDependencies : IList<IPackageDependency>;
-begin
-  result := FDependencies;
-end;
-
-function TDPMPackagePlatformDependencies.GetPlatform : TDPMPlatform;
-begin
-  result := FPlatform;
-end;
-
-{ TDPMPackageVersionResult }
-
-constructor TDPMPackageVersionResult.Create(const version : string; const platforms : TDPMPlatforms; const dependencies : IList<IPackagePlatformDependencies>);
-begin
-  FVersion := version;
-  FPlatforms := platforms;
-  FDependencies := dependencies;
-end;
-
-function TDPMPackageVersionResult.GetDependencies : IList<IPackagePlatformDependencies>;
-begin
-  result := FDependencies;
-end;
-
-function TDPMPackageVersionResult.GetPlatforms : TDPMPlatforms;
-begin
-  result := FPlatforms;
-end;
-
-function TDPMPackageVersionResult.GetVersion : string;
-begin
-  result := FVersion;
-end;
-
-{ TDPMPackageVersionsResults }
-
-constructor TDPMPackageVersionsResults.Create(const id : string; const results : IList<IPackageVersionResult>);
-begin
-  FId := id;
-  FResults := results;
-end;
-
-function TDPMPackageVersionsResults.GetId : string;
-begin
-  result := FId;
-end;
-
-function TDPMPackageVersionsResults.GetResults : IList<IPackageVersionResult>;
-begin
-  result := FResults;
-end;
+uses
+  System.SysUtils,
+  DPM.Core.Package.Dependency;
 
 { TDPMPackageSearchResultItem }
 
@@ -184,25 +134,87 @@ constructor TDPMPackageSearchResultItem.CreateFromError(const id : string; const
 begin
   FIsError := true;
   FId := id;
-  FVersion := version.ToString;
+  FVersion := version;
   FDescription := errorDescription;
+  FVersionRange := TVersionRange.Empty;
 end;
 
 constructor TDPMPackageSearchResultItem.CreateFromJson(const sourceName : string; const jsonObject : TJsonObject);
-begin
-  FDependencies := TCollections.CreateList<IPackagePlatformDependencies>;
-
-  //TODO : implement this;
-end;
-
-constructor TDPMPackageSearchResultItem.CreateFromMetaData(const sourceName : string; const metaData : IPackageMetadata; const platforms : TDPMPlatforms; const dependencies : IList<IPackagePlatformDependencies>);
+var
+  depArr : TJsonArray;
+  depId : string;
+  depVersion : string;
+  i: Integer;
+  range : TVersionRange;
+  dependency : IPackageDependency;
 begin
   FSourceName := sourceName;
-  FPlatforms := platforms;
-  FDependencies := TCollections.CreateList<IPackagePlatformDependencies>;
-  FDependencies.AddRange(dependencies);
+  FCompilerVersion := StringToCompilerVersion(jsonObject.S['compiler']);
+  if FCompilerVersion = TCompilerVersion.UnknownVersion then
+    raise EArgumentOutOfRangeException.Create('Invalid compiler version returned from server : ' + jsonObject.S['compiler']);
+
+  FPlatform := StringToDPMPlatform(jsonObject.S['platform']);
+  if FPlatform = TDPMPlatform.UnknownPlatform then
+    raise EArgumentOutOfRangeException.Create('Invalid platform returned from server : ' + jsonObject.S['platform']);
+
+  FDependencies := TCollections.CreateList<IPackageDependency>;
+
+  FId               := jsonObject.S['id'];
+  FVersion          := TPackageVersion.Parse(jsonObject.S['version']);
+
+  FAuthors          := jsonObject.S['authors'];
+  FCopyright        := jsonObject.S['copyright'];
+  FDescription      := jsonObject.S['description'];
+  FIcon             := jsonObject.S['icon'];
+  FIsCommercial     := jsonObject.B['isCommercial'];
+  FIsTrial          := jsonObject.B['isTrial'];
+  FLicense          := jsonObject.S['license'];
+  FProjectUrl       := jsonObject.S['projectUrl'];
+  FRepositoryUrl    := jsonObject.S['repositoryUrl'];
+  FRepositoryType   := jsonObject.S['repositoryType'];
+  FRepositoryBranch := jsonObject.S['repositoryBranch'];
+  FRepositoryCommit := jsonObject.S['repositoryCommit'];
+  FReportUrl        := jsonObject.S['reportUrl'];
+  FTags             := jsonObject.S['tags'];
+
+  FDownloadCount    := jsonObject.L['totalDownloads'];
+
+  FLatestVersion    := TPackageVersion.Parse(jsonObject.S['latestVersion']);
+
+  if jsonObject.Contains('latestStableVersion') and ( not jsonObject.IsNull('latestStableVersion')  )then
+    FLatestStableVersion := TPackageVersion.Parse(jsonObject.S['latestStableVersion'])
+  else
+    FLatestStableVersion := TPackageVersion.Empty;
+  FIsReservedPrefix := jsonObject.B['isReservedPrefix'];
+  FVersionRange := TVersionRange.Empty;
+
+  if jsonObject.Contains('dependencies') and (not jsonObject.IsNull('dependencies')) then
+  begin
+    depArr := jsonObject.A['dependencies'];
+    for i := 0 to depArr.Count -1 do
+    begin
+      depId := depArr.O[i].S['packageId'];
+      depVersion := depArr.O[i].S['versionRange'];
+
+      if TVersionRange.TryParse(depVersion, range) then
+      begin
+        dependency := TPackageDependency.Create(depId, range, FPlatform);
+        FDependencies.Add(dependency);
+      end;
+    end;
+  end;
+
+
+end;
+
+constructor TDPMPackageSearchResultItem.CreateFromMetaData(const sourceName : string; const metaData : IPackageMetadata);
+begin
+  FSourceName := sourceName;
+  FPlatform := metaData.Platform;
+  FCompilerVersion := metaData.CompilerVersion;
+  FDependencies := TCollections.CreateList<IPackageDependency>;
+  FDependencies.AddRange(metaData.Dependencies);
   FAuthors := metaData.Authors;
-  FOwners := metaData.Authors;
   FCopyright := metaData.Copyright;
   FDescription := metaData.Description;
   FIcon := metaData.Icon;
@@ -211,10 +223,15 @@ begin
   FIsTrial := metaData.IsTrial;
   FLicense := metaData.License;
   FProjectUrl := metaData.ProjectUrl;
+  FRepositoryUrl := metaData.RepositoryUrl;
+  FRepositoryType := metaData.RepositoryType;
+  FRepositoryBranch := metaData.RepositoryBranch;
+  FRepositoryCommit := metaData.RepositoryCommit;
   FTags := metaData.Tags;
-  FVersion := metaData.Version.ToStringNoMeta;
-  FDownloadCount := 123456; //-1; //indicates not set;
+  FVersion := metaData.Version;
+  FDownloadCount := -1; //indicates not set;
   FIsReservedPrefix := false;
+  FVersionRange := TVersionRange.Empty;
 end;
 
 class function TDPMPackageSearchResultItem.FromError(const id : string; const version : TPackageVersion; const errorDescription : string) : IPackageSearchResultItem;
@@ -227,9 +244,9 @@ begin
   result := TDPMPackageSearchResultItem.CreateFromJson(sourceName, jsonObject);
 end;
 
-class function TDPMPackageSearchResultItem.FromMetaData(const sourceName : string; const metaData : IPackageMetadata; const platforms : TDPMPlatforms; const dependencies : IList<IPackagePlatformDependencies>) : IPackageSearchResultItem;
+class function TDPMPackageSearchResultItem.FromMetaData(const sourceName : string; const metaData : IPackageMetadata) : IPackageSearchResultItem;
 begin
-  result := TDPMPackageSearchResultItem.CreateFromMetaData(sourceName, metaData, platforms, dependencies);
+  result := TDPMPackageSearchResultItem.CreateFromMetaData(sourceName, metaData);
 end;
 
 function TDPMPackageSearchResultItem.GetAuthors : string;
@@ -237,12 +254,17 @@ begin
   result := FAuthors;
 end;
 
+function TDPMPackageSearchResultItem.GetCompilerVersion: TCompilerVersion;
+begin
+  result := FCompilerVersion;
+end;
+
 function TDPMPackageSearchResultItem.GetCopyright : string;
 begin
   result := FCopyright;
 end;
 
-function TDPMPackageSearchResultItem.GetDependencies : IList<IPackagePlatformDependencies>;
+function TDPMPackageSearchResultItem.GetDependencies : IList<IPackageDependency>;
 begin
   result := FDependencies;
 end;
@@ -272,10 +294,6 @@ begin
   result := FInstalled;
 end;
 
-function TDPMPackageSearchResultItem.GetInstalledVersion : string;
-begin
-  result := FInstalledVersion;
-end;
 
 function TDPMPackageSearchResultItem.GetIsCommercial : Boolean;
 begin
@@ -287,9 +305,24 @@ begin
   result := FIsError;
 end;
 
+function TDPMPackageSearchResultItem.GetIsLatestStableVersion: boolean;
+begin
+  result := FVersion = FLatestStableVersion;
+end;
+
+function TDPMPackageSearchResultItem.GetIsLatestVersion: boolean;
+begin
+  result := FVersion = FLatestVersion;
+end;
+
 function TDPMPackageSearchResultItem.GetIsReservedPrefix : Boolean;
 begin
   result := FIsReservedPrefix;
+end;
+
+function TDPMPackageSearchResultItem.GetIsStableVersion: boolean;
+begin
+  result := FVersion.IsStable;
 end;
 
 function TDPMPackageSearchResultItem.GetIsTransitive : Boolean;
@@ -302,19 +335,25 @@ begin
   result := FIsTrial;
 end;
 
+function TDPMPackageSearchResultItem.GetLatestStableVersion: TPackageVersion;
+begin
+  result := FLatestStableVersion;
+end;
+
+function TDPMPackageSearchResultItem.GetLatestVersion: TPackageVersion;
+begin
+  result := FLatestVersion;
+end;
+
 function TDPMPackageSearchResultItem.GetLicense : string;
 begin
   result := FLicense;
 end;
 
-function TDPMPackageSearchResultItem.GetOwners : string;
-begin
-  result := FOwners;
-end;
 
-function TDPMPackageSearchResultItem.GetPlatforms : TDPMPlatforms;
+function TDPMPackageSearchResultItem.GetPlatform : TDPMPlatform;
 begin
-  result := FPlatforms;
+  result := FPlatform;
 end;
 
 function TDPMPackageSearchResultItem.GetProjectUrl : string;
@@ -332,6 +371,26 @@ begin
   result := FReportUrl;
 end;
 
+function TDPMPackageSearchResultItem.GetRepositoryBranch: string;
+begin
+  result := FRepositoryBranch;
+end;
+
+function TDPMPackageSearchResultItem.GetRepositoryCommit: string;
+begin
+  result := FRepositoryCommit;
+end;
+
+function TDPMPackageSearchResultItem.GetRepositoryType: string;
+begin
+  result := FRepositoryType;
+end;
+
+function TDPMPackageSearchResultItem.GetRepositoryUrl: string;
+begin
+  result := FRepositoryUrl;
+end;
+
 function TDPMPackageSearchResultItem.GetSourceName : string;
 begin
   result := FSourceName;
@@ -342,25 +401,36 @@ begin
   result := FTags;
 end;
 
-function TDPMPackageSearchResultItem.GetVersion : string;
+function TDPMPackageSearchResultItem.GetVersion : TPackageVersion;
 begin
   result := FVersion;
 end;
 
+
+function TDPMPackageSearchResultItem.GetVersionRange: TVersionRange;
+begin
+  result := FVersionRange;
+end;
 
 procedure TDPMPackageSearchResultItem.SetInstalled(const value : Boolean);
 begin
   FInstalled := value;
 end;
 
-procedure TDPMPackageSearchResultItem.SetInstalledVersion(const value : string);
-begin
-  FInstalledVersion := value;
-end;
 
 procedure TDPMPackageSearchResultItem.SetIsTransitive(const value : Boolean);
 begin
   FIsTransitive := value;
+end;
+
+procedure TDPMPackageSearchResultItem.SetLatestStableVersion(const value: TPackageVersion);
+begin
+  FLatestStableVersion := value;
+end;
+
+procedure TDPMPackageSearchResultItem.SetLatestVersion(const value: TPackageVersion);
+begin
+  FLatestVersion := value;
 end;
 
 procedure TDPMPackageSearchResultItem.SetPublishedDate(const value : string);
@@ -373,5 +443,77 @@ begin
   FReportUrl := value;
 end;
 
+procedure TDPMPackageSearchResultItem.SetRepositoryBranch(const value: string);
+begin
+  FRepositoryBranch := value;
+end;
+
+procedure TDPMPackageSearchResultItem.SetRepositoryCommit(const value: string);
+begin
+  FRepositoryCommit := value;
+end;
+
+procedure TDPMPackageSearchResultItem.SetRepositoryType(const value: string);
+begin
+  FRepositoryType := value;
+end;
+
+procedure TDPMPackageSearchResultItem.SetRepositoryUrl(const value: string);
+begin
+  FRepositoryUrl := value;
+end;
+
+procedure TDPMPackageSearchResultItem.SetVersion(const value: TPackageVersion);
+begin
+  FVersion := value;
+end;
+
+procedure TDPMPackageSearchResultItem.SetVersionRange(const value: TVersionRange);
+begin
+  FVersionRange := value;
+end;
+
+function TDPMPackageSearchResultItem.ToIdVersionString: string;
+begin
+  result := FId + ' [' + FVersion.ToStringNoMeta + ']';
+end;
+
+{ TDPMPackageSearchResult }
+
+constructor TDPMPackageSearchResult.Create(const skip : Int64; const total: Int64);
+begin
+  FSkip := skip;
+  FTotalCount := total;
+  FResults := TCollections.CreateList<IPackageSearchResultItem>;
+end;
+
+function TDPMPackageSearchResult.GetResults: IList<IPackageSearchResultItem>;
+begin
+  result := FResults;
+end;
+
+function TDPMPackageSearchResult.GetSkip: Int64;
+begin
+  Result := FSkip;
+end;
+
+function TDPMPackageSearchResult.GetTotalCount: Int64;
+begin
+  result := FTotalCount;
+end;
+
+procedure TDPMPackageSearchResult.SetSkip(const value: Int64);
+begin
+  FSkip := value;
+end;
+
+procedure TDPMPackageSearchResult.SetTotalCount(const value: Int64);
+begin
+  FTotalCount := value;
+end;
+
+
+initialization
+ JsonSerializationConfig.NullConvertsToValueTypes := true;
 end.
 

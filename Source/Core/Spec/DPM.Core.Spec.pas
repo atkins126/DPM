@@ -65,7 +65,7 @@ type
     function ExpandTargetPlatforms : boolean;
     function ReplaceTokens(const version : TPackageVersion; const properties : TStringList) : boolean;
 
-    procedure GetTokensForTargetPlatform(const target : TCompilerVersion; const platform : TDPMPlatform; const version : TPackageVersion; const list : TStringList);
+    procedure GetTokensForTargetPlatform(const targetPlatform : ISpecTargetPlatform; const version : TPackageVersion; const list : TStringList; const externalProps : TStringList);
 
     function TokenMatchEvaluator(const match : TMatch) : string;
     function PreProcess(const version : TPackageVersion; const properties : TStringList) : boolean;
@@ -97,7 +97,8 @@ uses
   DPM.Core.Dependency.Version,
   DPM.Core.Spec.MetaData,
   DPM.Core.Spec.Template,
-  DPM.Core.Spec.TargetPlatform;
+  DPM.Core.Spec.TargetPlatform,
+  DPM.Core.Utils.Strings;
 
 { TSpec }
 
@@ -456,22 +457,56 @@ begin
   //TODO : Sort targetPlatforms by compiler then platform
 end;
 
-procedure TSpec.GetTokensForTargetPlatform(const target : TCompilerVersion; const platform : TDPMPlatform; const version : TPackageVersion; const list : TStringList);
+procedure TSpec.GetTokensForTargetPlatform(const targetPlatform : ISpecTargetPlatform; const version : TPackageVersion; const list : TStringList; const externalProps : TStringList);
+var
+  i: Integer;
+  regEx : TRegEx;
+  evaluator : TMatchEvaluator;
 begin
   list.Clear;
   if not version.IsEmpty then
     list.Add('version=' + version.ToString)
   else
     list.Add('version=' + FMetaData.Version.ToString);
-  list.Add('target=' + CompilerToString(target));
-  list.Add('compiler=' + CompilerToString(target));
-  list.Add('compilerNoPoint=' + CompilerToStringNoPoint(target));
-  list.Add('compilerCodeName=' + CompilerCodeName(target));
-  list.Add('compilerWithCodeName=' + CompilerWithCodeName(target));
-  list.Add('platform=' + DPMPlatformToString(platform));
-  list.Add('compilerVersion=' + CompilerToCompilerVersionIntStr(target));
-  list.Add('libSuffix=' + CompilerToLibSuffix(target));
-  list.Add('bdsVersion=' + CompilerToBDSVersion(target));
+  list.Add('target=' + CompilerToString(targetPlatform.Compiler));
+  list.Add('compiler=' + CompilerToString(targetPlatform.Compiler));
+  list.Add('compilerNoPoint=' + CompilerToStringNoPoint(targetPlatform.Compiler));
+  list.Add('compilerCodeName=' + CompilerCodeName(targetPlatform.Compiler));
+  list.Add('compilerWithCodeName=' + CompilerWithCodeName(targetPlatform.Compiler));
+  list.Add('platform=' + DPMPlatformToString(targetPlatform.Platforms[0]));
+  list.Add('compilerVersion=' + CompilerToCompilerVersionIntStr(targetPlatform.Compiler));
+  list.Add('libSuffix=' + CompilerToLibSuffix(targetPlatform.Compiler));
+  list.Add('bdsVersion=' + CompilerToBDSVersion(targetPlatform.Compiler));
+
+  if targetPlatform.Variables.Count = 0 then
+    exit;
+
+  //override the values with values from the template.
+  for i := 0 to targetPlatform.Variables.Count -1 do
+  begin
+    list.Values[targetPlatform.Variables.Names[i]] := '';
+    list.Add(targetPlatform.Variables.Names[i] + '=' + targetPlatform.Variables.ValueFromIndex[i]);
+  end;
+
+
+  //apply external props passed in on command line.
+  if externalProps.Count > 0 then
+  begin
+    for i := 0 to externalProps.Count -1 do
+      list.Values[externalProps.Names[i]] := externalProps.ValueFromIndex[i];
+  end;
+
+  regEx := TRegEx.Create('\$(\w+)\$');
+  evaluator := TokenMatchEvaluator;
+
+  //variables from the spec and external may reference existing variables.
+  for i := 0 to list.Count -1 do
+  begin
+    if TStringUtils.Contains(list.ValueFromIndex[i], '$') then
+      list.ValueFromIndex[i] := regEx.Replace(list.ValueFromIndex[i], evaluator);
+  end;
+
+
 end;
 
 function TSpec.FindTemplate(const name : string) : ISpecTemplate;
@@ -510,6 +545,7 @@ var
   bplEntry : ISpecBPLEntry;
   metaDataObj : TJsonObject;
   targetPlatformObject : TJDOJsonObject;
+//  variablesObj : TJsonObject;
   dependencyObj : TJsonObject;
   seachPathObj : TJsonObject;
   buildEntryObj : TJsonObject;
@@ -531,6 +567,16 @@ begin
     //optional metadata
     if FMetaData.ProjectUrl <> '' then
       metaDataObj['projectUrl'] := FMetaData.ProjectUrl;
+
+    if FMetaData.RepositoryUrl <> '' then
+      metaDataObj['repositoryUrl'] := FMetaData.RepositoryUrl;
+    if FMetaData.RepositoryType <> '' then
+      metaDataObj['repositoryType'] := FMetaData.RepositoryType;
+    if FMetaData.RepositoryBranch <> '' then
+      metaDataObj['repositoryBranch'] := FMetaData.RepositoryBranch;
+    if FMetaData.RepositoryCommit <> '' then
+      metaDataObj['repositoryCommit'] := FMetaData.RepositoryCommit;
+
     if FMetaData.License <> '' then
       metaDataObj['license'] := FMetaData.License;
     if FMetaData.Icon <> '' then
@@ -546,12 +592,26 @@ begin
     if FMetaData.Tags <> '' then
       metaDataObj['tags'] := FMetaData.tags;
 
+    if FMetaData.ReadMe <> '' then
+      metaDataObj['readme'] := FMetaData.ReadMe;
+
+    if FMetaData.ReleaseNotes <> '' then
+      metaDataObj['releaseNotes'] := FMetaData.ReleaseNotes;
+
     metaDataObj['isTrial'] := LowerCase(BoolToStr(FMetaData.IsTrial, true));
     metaDataObj['isCommercial'] := LowerCase(BoolToStr(FMetaData.IsCommercial, true));
+    metaDataObj['uiFramework'] := UIFrameworkTypeToString(FMetaData.UIFrameworkType);
 
     targetPlatformObject := Obj.A['targetPlatforms'].AddObject;
     targetPlatformObject['compiler'] := CompilerToString(targetPlatform.Compiler);
     targetPlatformObject['platforms'] := DPMPlatformToString(targetPlatform.Platforms[0]);
+
+//    if targetPlatform.Variables.Count > 0 then
+//    begin
+//      variablesObj := targetPlatformObject.O['variables'];
+//      for i := 0 to targetPlatform.Variables.Count -1 do
+//        variablesObj.S[targetPlatform.Variables.Names[i]] := targetPlatform.Variables.ValueFromIndex[i];
+//    end;
 
     if targetPlatform.Dependencies.Any then
     begin
@@ -768,23 +828,34 @@ begin
   result := true;
   Logger.Information('Replacing tokens..');
   tokenList := TStringList.Create;
+  FCurrentTokens := tokenList;
   try
     try
       regEx := TRegEx.Create('\$(\w+)\$');
       evaluator := TokenMatchEvaluator; //work around for compiler overload resolution issue.
       for targetPlatform in FTargetPlatforms do
       begin
-        GetTokensForTargetPlatform(targetPlatform.Compiler, targetPlatform.Platforms[0], version, tokenList);
-        FCurrentTokens := tokenList;
-        FCurrentTokens.AddStrings(properties);
+        GetTokensForTargetPlatform(targetPlatform, version, tokenList, properties);
         FMetaData.Id := regEx.Replace(FMetaData.Id, evaluator);
         FMetaData.Description := regEx.Replace(FMetaData.Description, evaluator);
         FMetaData.Authors := regEx.Replace(FMetaData.Authors, evaluator);
-        FMetaData.ProjectUrl := regEx.Replace(FMetaData.ProjectUrl, evaluator);
+        if FMetaData.ProjectUrl <> '' then
+          FMetaData.ProjectUrl := regEx.Replace(FMetaData.ProjectUrl, evaluator);
+        if FMetaData.RepositoryUrl <> '' then
+          FMetaData.RepositoryUrl := regEx.Replace(FMetaData.RepositoryUrl, evaluator);
+        if FMetaData.RepositoryType <> '' then
+          FMetaData.RepositoryType := regEx.Replace(FMetaData.RepositoryType, evaluator);
+        if FMetaData.RepositoryBranch <> '' then
+          FMetaData.RepositoryBranch := regEx.Replace(FMetaData.RepositoryBranch, evaluator);
+        if FMetaData.RepositoryCommit <> '' then
+          FMetaData.RepositoryCommit := regEx.Replace(FMetaData.RepositoryCommit, evaluator);
         FMetaData.License := regEx.Replace(FMetaData.License, evaluator);
-        FMetaData.Icon := regEx.Replace(FMetaData.Icon, evaluator);
-        FMetaData.Copyright := regEx.Replace(FMetaData.Copyright, evaluator);
-        FMetaData.Tags := regEx.Replace(FMetaData.Tags, evaluator);
+        if FMetaData.Icon <> '' then
+          FMetaData.Icon := regEx.Replace(FMetaData.Icon, evaluator);
+        if FMetaData.Copyright <> '' then
+          FMetaData.Copyright := regEx.Replace(FMetaData.Copyright, evaluator);
+        if FMetaData.Tags <> '' then
+          FMetaData.Tags := regEx.Replace(FMetaData.Tags, evaluator);
 
         for fileEntry in targetPlatform.SourceFiles do
         begin
@@ -807,11 +878,13 @@ begin
         for bplEntry in targetPlatform.RuntimeFiles do
         begin
           bplEntry.Source := Trim(regEx.Replace(bplEntry.Source, evaluator));
+          bplEntry.BuildId := Trim(regEx.Replace(bplEntry.BuildId, evaluator));
         end;
 
         for bplEntry in targetPlatform.DesignFiles do
         begin
           bplEntry.Source := Trim(regEx.Replace(bplEntry.Source, evaluator));
+          bplEntry.BuildId := Trim(regEx.Replace(bplEntry.BuildId, evaluator));
         end;
 
         for buildEntry in targetPlatform.BuildEntries do

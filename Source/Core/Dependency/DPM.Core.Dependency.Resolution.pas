@@ -42,28 +42,47 @@ type
     FPackage : IPackageInfo;
     FParentId : string;
     FVersionRange : TVersionRange;
+    FProject : string;
   protected
+    function GetIsTopLevel : boolean;
     function GetPackage : IPackageInfo;
     function GetParentId : string;
+    function GetProject : string;
     function GetVersionRange : TVersionRange;
     procedure SetVersionRange(const value : TVersionRange);
-
-
+    function Clone(const parentId : string) : IResolution;
   public
-    constructor Create(const package : IPackageInfo; const range : TVersionRange; const parentId : string);
+    constructor Create(const package : IPackageInfo; const range : TVersionRange; const parentId : string; const project : string);
   end;
 
 implementation
 
+uses
+  System.SysUtils,
+  DPM.Core.Constants;
+
 { TResolution }
 
-constructor TResolution.Create(const package : IPackageInfo; const range : TVersionRange; const parentId : string);
+function TResolution.Clone(const parentId: string): IResolution;
+begin
+  result := TResolution.Create(FPackage, FVersionRange, parentId, FProject);
+end;
+
+constructor TResolution.Create(const package : IPackageInfo; const range : TVersionRange; const parentId : string; const project : string);
 begin
   FPackage := package;
   FVersionRange := range;
+  if FVersionRange.IsEmpty then
+    raise EArgumentOutOfRangeException.Create('Empty version range provided for resolution');
   FParentId := parentId;
+  FProject := project;
 end;
 
+
+function TResolution.GetIsTopLevel: boolean;
+begin
+  result := FParentId = cRootNode;
+end;
 
 function TResolution.GetPackage : IPackageInfo;
 begin
@@ -73,6 +92,11 @@ end;
 function TResolution.GetParentId : string;
 begin
   result := FParentId;
+end;
+
+function TResolution.GetProject: string;
+begin
+  result := FProject;
 end;
 
 function TResolution.GetVersionRange : TVersionRange;

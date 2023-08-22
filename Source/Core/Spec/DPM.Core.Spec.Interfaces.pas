@@ -76,37 +76,59 @@ type
     function GetDescription : string;
     function GetAuthors : string;
     function GetProjectUrl : string;
+    function GetRepositoryUrl : string;
+    function GetRepositoryType : string;
+    function GetRepositoryBranch : string;
+    function GetRepositoryCommit : string;
+    function GetReleaseNotes : string;
     function GetLicense : string;
     function GetIcon : string;
     function GetCopyright : string;
     function GetTags : string;
     function GetIsTrial : boolean;
     function GetIsCommercial : boolean;
-    procedure SetVersion(const value : TPackageVersion);
+    function GetReadMe : string;
+    function GetUIFrameworkType : TDPMUIFrameworkType;
 
+    procedure SetVersion(const value : TPackageVersion);
     procedure SetId(const value : string);
     procedure SetDescription(const value : string);
     procedure SetAuthors(const value : string);
     procedure SetProjectUrl(const value : string);
+    procedure SetRepositoryUrl(const value : string);
+    procedure SetRepositoryType(const value : string);
+    procedure SetRepositoryBranch(const value : string);
+    procedure SetRepositoryCommit(const value : string);
+    procedure SetReleaseNotes(const value : string);
     procedure SetLicense(const value : string);
     procedure SetIcon(const value : string);
     procedure SetCopyright(const value : string);
     procedure SetTags(const value : string);
     procedure SetIsTrial(const value : boolean);
     procedure SetIsCommercial(const value : boolean);
+    procedure SetReadMe(const value : string);
+    procedure SetUIFrameworkType(const value : TDPMUIFrameworkType);
+
 
     property Id : string read GetId write SetId;
     property Version : TPackageVersion read GetVersion write SetVersion;
     property Description : string read GetDescription write SetDescription;
     property Authors : string read GetAuthors write SetAuthors;
-    property ProjectUrl : string read GetProjectUrl write SetProjectUrl;
+    property ProjectUrl       : string read GetProjectUrl write SetProjectUrl;
+    property RepositoryUrl    : string read GetRepositoryUrl write SetRepositoryUrl;
+    property RepositoryType   : string read GetRepositoryType write SetRepositoryType;
+    property RepositoryBranch : string read GetRepositoryBranch write SetRepositoryBranch;
+    property RepositoryCommit : string read GetRepositoryCommit write SetRepositoryCommit;
+    property ReleaseNotes     : string read GetReleaseNotes write SetReleaseNotes;
     property License : string read GetLicense write SetLicense;
     property Icon : string read GetIcon write SetIcon;
-    //TODO : Add IconUrl
     property Copyright : string read GetCopyright write SetCopyright;
     property Tags : string read GetTags write SetTags;
     property IsTrial : boolean read GetIsTrial write SetIsTrial;
     property IsCommercial : boolean read GetIsCommercial write SetIsCommercial;
+    property ReadMe : string read GetReadMe write SetReadMe;
+    property UIFrameworkType : TDPMUIFrameworkType read  GetUIFrameworkType write SetUIFrameworkType;
+
   end;
 
   ISpecFileEntry = interface(ISpecNode)
@@ -135,13 +157,14 @@ type
     function GetCopyLocal : boolean;
     function GetInstall : boolean;
     function GetBuildId : string;
-    procedure SetSource(const value : string);
 
+    procedure SetSource(const value : string);
+    procedure SetBuildId(const value : string);
     function Clone : ISpecBPLEntry;
     property Source : string read GetSource write SetSource;
     property CopyLocal : boolean read GetCopyLocal; //ignored for design
     property Install : boolean read GetInstall; //ignored for runtime
-    property BuildId : string read GetBuildId;
+    property BuildId : string read GetBuildId write SetBuildId;
   end;
 
   ISpecSearchPath = interface(ISpecNode)
@@ -253,10 +276,14 @@ type
     function GetPlatforms : TArray<TDPMPlatform>;
     function GetTemplateName : string;
     function GetCompiler : TCompilerVersion;
+    function GetVariables : TStrings;
+
     function CloneForPlatform(const platform : TDPMPlatform) : ISpecTargetPlatform;
+
     property Compiler : TCompilerVersion read GetCompiler;
     property Platforms : TArray<TDPMPlatform>read GetPlatforms;
     property TemplateName : string read GetTemplateName;
+    property Variables : TStrings read GetVariables;
   end;
 
 
@@ -282,8 +309,7 @@ type
 
   IPackageSpecReader = interface
     ['{8A20F825-8DCA-4784-BDBD-8F91A651BA72}']
-    function ReadSpec(const fileName : string) : IPackageSpec; overload;
-    // function ReadSpec(const stream : TStream) : IPackageSpec;overload;
+    function ReadSpec(const fileName : string) : IPackageSpec;
     function ReadSpecString(const specString : string) : IPackageSpec;
   end;
 

@@ -45,29 +45,49 @@ type
     FDescription : string;
     FAuthors : string;
     FProjectUrl : string;
+    FRepositoryUrl : string;
+    FRepositoryType : string;
+    FRepositoryBranch : string;
+    FRepositoryCommit : string;
+    FReleaseNotes : string;
     FLicense : string;
     FIcon : string;
     FCopyright : string;
     FTags : string;
     FIsTrial : boolean;
     FIsCommercial : boolean;
+    FReadme : string;
+    FUIFrameworkType : TDPMUIFrameworkType;
   protected
     function GetVersion : TPackageVersion;
     function GetId : string;
     function GetDescription : string;
     function GetAuthors : string;
     function GetProjectUrl : string;
+    function GetRepositoryUrl : string;
+    function GetRepositoryType : string;
+    function GetRepositoryBranch : string;
+    function GetRepositoryCommit : string;
+    function GetReleaseNotes : string;
     function GetLicense : string;
     function GetIcon : string;
     function GetCopyright : string;
     function GetTags : string;
     function GetIsTrial : boolean;
     function GetIsCommercial : boolean;
+    function GetReadMe : string;
+    function GetUIFrameworkType: TDPMUIFrameworkType;
+
 
     procedure SetId(const value : string);
     procedure SetDescription(const value : string);
     procedure SetAuthors(const value : string);
     procedure SetProjectUrl(const value : string);
+    procedure SetRepositoryUrl(const value : string);
+    procedure SetRepositoryType(const value : string);
+    procedure SetRepositoryBranch(const value : string);
+    procedure SetRepositoryCommit(const value : string);
+    procedure SetReleaseNotes(const value : string);
     procedure SetLicense(const value : string);
     procedure SetIcon(const value : string);
     procedure SetCopyright(const value : string);
@@ -75,7 +95,11 @@ type
     procedure SetIsTrial(const value : boolean);
     procedure SetIsCommercial(const value : boolean);
     procedure SetVersion(const value : TPackageVersion);
+    procedure SetReadMe(const value : string);
+    procedure SetUIFrameworkType(const value: TDPMUIFrameworkType);
+
     function LoadFromJson(const jsonObject : TJsonObject) : Boolean; override;
+
   public
     constructor Create(const logger : ILogger); override;
 
@@ -93,6 +117,7 @@ constructor TSpecMetaData.Create(const logger : ILogger);
 begin
   inherited Create(logger);
   FVersion := TPackageVersion.Empty;
+  FUIFrameworkType := TDPMUIFrameworkType.None;
 end;
 
 function TSpecMetaData.GetAuthors : string;
@@ -142,9 +167,44 @@ begin
   result := FProjectUrl;
 end;
 
+function TSpecMetaData.GetReadMe: string;
+begin
+  result := FReadme;
+end;
+
+function TSpecMetaData.GetReleaseNotes: string;
+begin
+  result := FReleaseNotes;
+end;
+
+function TSpecMetaData.GetRepositoryBranch: string;
+begin
+  result := FRepositoryBranch;
+end;
+
+function TSpecMetaData.GetRepositoryCommit: string;
+begin
+  result := FRepositoryCommit;
+end;
+
+function TSpecMetaData.GetRepositoryType: string;
+begin
+  result := FRepositoryType;
+end;
+
+function TSpecMetaData.GetRepositoryUrl: string;
+begin
+  result := FRepositoryUrl;
+end;
+
 function TSpecMetaData.GetTags : string;
 begin
   result := FTags;
+end;
+
+function TSpecMetaData.GetUIFrameworkType: TDPMUIFrameworkType;
+begin
+  result := FUIFrameworkType;
 end;
 
 function TSpecMetaData.GetVersion : TPackageVersion;
@@ -157,6 +217,7 @@ function TSpecMetaData.LoadFromJson(const jsonObject : TJsonObject) : Boolean;
 var
   sVersion : string;
   sError : string;
+  sUI : string;
 begin
   result := true;
   FId := jsonObject.S['id'];
@@ -195,12 +256,22 @@ begin
   end;
 
   FProjectUrl := jsonObject.S['projectUrl'];
+  FRepositoryUrl := jsonObject.S['repositoryUrl'];
+  FRepositoryType := jsonObject.S['repositoryType'];
+  FRepositoryBranch := jsonObject.S['repositoryBranch'];
+  FRepositoryCommit := jsonObject.S['repositoryCommit'];
+  FReleaseNotes := jsonObject.S['releaseNotes'];
   FLicense := jsonObject.S['license'];
   FIcon := jsonObject.S['icon'];
   FCopyright := jsonObject.S['copyright'];
+  FReadme := jsonObject.S['readme'];
   FTags := jsonObject.S['tags'];
   FIsTrial := jsonObject.B['isTrial'];
   FIsCommercial := jsonObject.B['isCommercial'];
+  sUI := jsonObject.S['uiFramework'];
+  if sUI <> '' then
+    FUIFrameworkType := StringToUIFrameworkType(sUI);
+
 end;
 
 
@@ -249,9 +320,44 @@ begin
   FProjectUrl := value;
 end;
 
+procedure TSpecMetaData.SetReadMe(const value: string);
+begin
+  FReadme := value;
+end;
+
+procedure TSpecMetaData.SetReleaseNotes(const value: string);
+begin
+  FReleaseNotes := value;
+end;
+
+procedure TSpecMetaData.SetRepositoryBranch(const value: string);
+begin
+  FRepositoryBranch := value;
+end;
+
+procedure TSpecMetaData.SetRepositoryCommit(const value: string);
+begin
+  FRepositoryCommit := value;
+end;
+
+procedure TSpecMetaData.SetRepositoryType(const value: string);
+begin
+  FRepositoryType := value;
+end;
+
+procedure TSpecMetaData.SetRepositoryUrl(const value: string);
+begin
+  FRepositoryUrl := value;
+end;
+
 procedure TSpecMetaData.SetTags(const value : string);
 begin
   FTags := value;
+end;
+
+procedure TSpecMetaData.SetUIFrameworkType(const value: TDPMUIFrameworkType);
+begin
+  FUIFrameworkType := value;
 end;
 
 procedure TSpecMetaData.SetVersion(const value : TPackageVersion);

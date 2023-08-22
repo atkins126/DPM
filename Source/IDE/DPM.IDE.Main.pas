@@ -30,7 +30,6 @@ interface
 
 uses
   ToolsAPI,
-  WinApi.Windows,
   System.SysUtils,
   Vcl.Dialogs,
   DPM.IDE.Wizard;
@@ -43,6 +42,7 @@ exports
 implementation
 
 uses
+  WinApi.ActiveX,
   Vcl.Graphics,
   DPM.IDE.Constants;
 
@@ -58,13 +58,12 @@ begin
     SplashImage.LoadFromResourceName(HInstance, 'DPMIDELOGO');
     SplashScreenServices.AddPluginBitmap(cWizardTitle, SplashImage.Handle);
 
-    (BorlandIDEServices as IOTAAboutBoxServices).AddPluginInfo(cWizardTitle, cWizardTitle, SplashImage.Handle);
+    (BorlandIDEServices as IOTAAboutBoxServices).AddPluginInfo(cWizardTitle, cWizardDescription, SplashImage.Handle);
 
   except
     on E : Exception do
     begin
-      MessageDlg('Failed to load wizard splash image', mtError, [mbOK], 0);
-      OutputDebugString('Failed to load splash image');
+      MessageDlg('Failed to create Wizard instance ' + #13#10 + e.Message , mtError, [mbOK], 0);
       result := nil;
     end;
   end;
@@ -87,6 +86,8 @@ function InitWizard(const BorlandIDEServices : IBorlandIDEServices;
 var
   wizard : IOTAWizard;
 begin
+  CoInitializeEx(nil,COINIT_APARTMENTTHREADED);
+
   try
     wizard := CreateWizard(BorlandIDEServices);
     if wizard <> nil then

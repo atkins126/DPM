@@ -1,8 +1,8 @@
-{***************************************************************************}
+ï»¿{***************************************************************************}
 {                                                                           }
 {           Delphi Package Manager - DPM                                    }
 {                                                                           }
-{           Copyright © 2019 Vincent Parrett and contributors               }
+{           Copyright ï¿½ 2019 Vincent Parrett and contributors               }
 {                                                                           }
 {           vincent@finalbuilder.com                                        }
 {           https://www.finalbuilder.com                                    }
@@ -41,7 +41,7 @@ type
   //Note : This type is serialized in options, changing names or order may break things!
   TVerbosity = (Quiet, Normal, Detailed, Debug);
 
-  TSourceType = (Folder, DPMServer, DPMGithub, DNGithub);
+  TSourceType = (Folder, DPMServer);
 
   //TODO : Decide on min delphi version supported. Ideally go back as far as possible
 
@@ -58,8 +58,9 @@ type
     RS10_1,
     RS10_2,
     RS10_3,
-    RS10_4 //probably the next version.
-
+    RS10_4,
+    RS11_0,
+    RS12_0
     );
 
   TCompilerVersions = set of TCompilerVersion;
@@ -73,6 +74,7 @@ type
     WinArm64, //reserved for future use
     OSX32,
     OSX64,
+    OSXARM64,
     AndroidArm32,
     AndroidArm64,
     AndroidIntel32, //reserved for future use
@@ -87,6 +89,11 @@ type
 
   TDPMPlatforms = set of TDPMPlatform;
 
+  TDPMUIFrameworkType = (
+    None,
+    VCL,
+    FMX
+    );
 
   TConstProc<T> = reference to procedure(const Arg1 : T);
   TConstProc<T1, T2> = reference to procedure(const Arg1 : T1; const Arg2 : T2);
@@ -135,6 +142,9 @@ function ProjectPlatformToDPMPlatform(const value : string) : TDPMPlatform;
 
 function AllPlatforms(const compiler : TCompilerVersion) : TDPMPlatforms;
 
+function StringToUIFrameworkType(const value : string) : TDPMUIFrameworkType;
+function UIFrameworkTypeToString(const value : TDPMUIFrameworkType) : string;
+
 implementation
 
 // For Delphi XE3 and up:
@@ -165,6 +175,10 @@ begin
     sValue := 'RS' + sValue;
   sValue := StringReplace(sValue, '.', '_', [rfReplaceAll]);
 
+  //we changed it to include the _0 - some packages might not have that.
+  if sValue = 'RS11' then
+    sValue := 'RS11_0';
+
   iValue := GetEnumValue(typeInfo(TCompilerVersion), sValue);
 
   if iValue = -1 then
@@ -182,6 +196,8 @@ begin
   begin
     if value = 'Android' then
       result := TDPMPlatform.AndroidArm32
+    else if value = 'Android64' then
+      result := TDPMPlatform.AndroidArm64
     else if value = 'Linux64' then
       result := TDPMPlatform.LinuxIntel64
     else
@@ -194,6 +210,22 @@ end;
 function IsValidPlatformString(const value : string) : boolean;
 begin
   result := StringToDPMPlatform(value) <> TDPMPlatform.UnknownPlatform;
+end;
+
+function StringToUIFrameworkType(const value : string) : TDPMUIFrameworkType;
+var
+  iValue : integer;
+begin
+  iValue := GetEnumValue(typeInfo(TDPMUIFrameworkType), value);
+  if iValue = -1 then
+    result := TDPMUIFrameworkType.None
+  else
+    result := TDPMUIFrameworkType(iValue);
+end;
+
+function UIFrameworkTypeToString(const value : TDPMUIFrameworkType) : string;
+begin
+  result := GetEnumName(TypeInfo(TDPMUIFrameworkType), ord(value));
 end;
 
 function CompilerToString(const value : TCompilerVersion) : string;
@@ -230,29 +262,37 @@ begin
     TDPMPlatform.WinArm64: result := 'Windows 64-bit ARM';
     TDPMPlatform.OSX32: result := 'macOS 32-bit';
     TDPMPlatform.OSX64: result := 'macOS 64-bit';
+    TDPMPlatform.OSXARM64: result := 'macOS ARM 64-bit';
+
     TDPMPlatform.AndroidArm32: result := 'Andriod 32-bit ARM';
     TDPMPlatform.AndroidArm64: result := 'Andriod 64-bit ARM';
     TDPMPlatform.AndroidIntel32: result := 'Andriod 32-bit Intel';
     TDPMPlatform.AndroidIntel64: result := 'Andriod 64-bit Intel';
     TDPMPlatform.iOS32: result := 'iOS 32-bit';
-    TDPMPlatform.iOS64: result := 'iOS 32-bit';
+    TDPMPlatform.iOS64: result := 'iOS 64-bit';
     TDPMPlatform.LinuxIntel32: result := 'Linux 32-bit';
     TDPMPlatform.LinuxIntel64: result := 'Linux 64-bit';
     TDPMPlatform.LinuxArm32: result := 'Linux 32-bit ARM';
-    TDPMPlatform.LinuxArm64: result := 'Linux 32-bit ARM';
+    TDPMPlatform.LinuxArm64: result := 'Linux 64-bit ARM';
   end;
 
 end;
 
 function DPMPlatformToString(const value : TDPMPlatform) : string;
 begin
-  result := GetEnumName(TypeInfo(TDPMPlatform), ord(value));
+  case value  of
+    TDPMPlatform.AndroidArm32: result := 'Android';
+    TDPMPlatform.AndroidArm64: result := 'Android64';
+  else
+    result := GetEnumName(TypeInfo(TDPMPlatform), ord(value));
+  end;
 end;
 
 function DPMPlatformToBDString(const value : TDPMPlatform) : string;
 begin
   case value of
     TDPMPlatform.AndroidArm32 : result := 'Android';
+    TDPMPlatform.AndroidArm64 : result := 'Android64';
   else
     result := GetEnumName(TypeInfo(TDPMPlatform), ord(value));
   end;
@@ -296,6 +336,10 @@ begin
         TDPMPlatform.AndroidArm64, TDPMPlatform.OSX64];
     TCompilerVersion.RS10_4 : result := [TDPMPlatform.Win32, TDPMPlatform.Win64, TDPMPlatform.OSX64, TDPMPlatform.iOS32, TDPMPlatform.iOS64, TDPMPlatform.AndroidArm32,
         TDPMPlatform.AndroidArm64, TDPMPlatform.LinuxIntel64];
+    TCompilerVersion.RS11_0 : result := [TDPMPlatform.Win32, TDPMPlatform.Win64, TDPMPlatform.OSXARM64, TDPMPlatform.OSX64, TDPMPlatform.iOS64, TDPMPlatform.AndroidArm32,
+        TDPMPlatform.AndroidArm64, TDPMPlatform.LinuxIntel64];
+    TCompilerVersion.RS12_0 : result := [TDPMPlatform.Win32, TDPMPlatform.Win64, TDPMPlatform.OSXARM64, TDPMPlatform.OSX64, TDPMPlatform.iOS64, TDPMPlatform.AndroidArm32,
+        TDPMPlatform.AndroidArm64, TDPMPlatform.LinuxIntel64];
   else
     raise Exception.Create('AllPlatforms is missing for : ' + CompilerToString(compiler));
   end;
@@ -309,6 +353,8 @@ begin
     TCompilerVersion.RS10_2 : result := 'Tokyo';
     TCompilerVersion.RS10_3 : result := 'Rio';
     TCompilerVersion.RS10_4 : result := 'Sydney';
+    TCompilerVersion.RS11_0 : result := 'Alexandria';
+    TCompilerVersion.RS12_0 : result := 'Dunno';
   else
     result := '';
   end;
@@ -330,18 +376,20 @@ end;
 function CompilerToLibSuffix(const compiler : TCompilerVersion) : string;
 begin
   case compiler of
-    TCompilerVersion.RSXE2 : result := '160';
-    TCompilerVersion.RSXE3 : result := '170';
-    TCompilerVersion.RSXE4 : result := '180';
-    TCompilerVersion.RSXE5 : result := '190';
-    TCompilerVersion.RSXE6 : result := '200';
-    TCompilerVersion.RSXE7 : result := '210';
-    TCompilerVersion.RSXE8 : result := '220';
+    TCompilerVersion.RSXE2  : result := '160';
+    TCompilerVersion.RSXE3  : result := '170';
+    TCompilerVersion.RSXE4  : result := '180';
+    TCompilerVersion.RSXE5  : result := '190';
+    TCompilerVersion.RSXE6  : result := '200';
+    TCompilerVersion.RSXE7  : result := '210';
+    TCompilerVersion.RSXE8  : result := '220';
     TCompilerVersion.RS10_0 : result := '230';
     TCompilerVersion.RS10_1 : result := '240';
     TCompilerVersion.RS10_2 : result := '250';
     TCompilerVersion.RS10_3 : result := '260';
     TCompilerVersion.RS10_4 : result := '270';
+    TCompilerVersion.RS11_0 : result := '280';
+    TCompilerVersion.RS12_0 : result := '290';
   else
     raise Exception.Create('LibSuffix is missing for : ' + CompilerToString(compiler));
   end;
@@ -351,18 +399,20 @@ end;
 function CompilerToBDSVersion(const compiler : TCompilerVersion) : string;
 begin
   case compiler of
-    TCompilerVersion.RSXE2 : result := '9.0';
-    TCompilerVersion.RSXE3 : result := '10.0';
-    TCompilerVersion.RSXE4 : result := '11.0';
-    TCompilerVersion.RSXE5 : result := '12.0';
-    TCompilerVersion.RSXE6 : result := '14.0';
-    TCompilerVersion.RSXE7 : result := '15.0';
-    TCompilerVersion.RSXE8 : result := '16.0';
+    TCompilerVersion.RSXE2  : result := '9.0';
+    TCompilerVersion.RSXE3  : result := '10.0';
+    TCompilerVersion.RSXE4  : result := '11.0';
+    TCompilerVersion.RSXE5  : result := '12.0';
+    TCompilerVersion.RSXE6  : result := '14.0';
+    TCompilerVersion.RSXE7  : result := '15.0';
+    TCompilerVersion.RSXE8  : result := '16.0';
     TCompilerVersion.RS10_0 : result := '17.0';
     TCompilerVersion.RS10_1 : result := '18.0';
     TCompilerVersion.RS10_2 : result := '19.0';
     TCompilerVersion.RS10_3 : result := '20.0';
     TCompilerVersion.RS10_4 : result := '21.0';
+    TCompilerVersion.RS11_0 : result := '22.0';
+    TCompilerVersion.RS12_0 : result := '23.0';
   else
     raise Exception.Create('BDSVersion is missing for : ' + CompilerToString(compiler));
   end;
@@ -372,18 +422,22 @@ end;
 function CompilerToCompilerVersionIntStr(const compiler : TCompilerVersion) : string;
 begin
   case compiler of
-    TCompilerVersion.RSXE2 : result := '23';
-    TCompilerVersion.RSXE3 : result := '24';
-    TCompilerVersion.RSXE4 : result := '25';
-    TCompilerVersion.RSXE5 : result := '26';
-    TCompilerVersion.RSXE6 : result := '27';
-    TCompilerVersion.RSXE7 : result := '28';
-    TCompilerVersion.RSXE8 : result := '29';
+    //2010 = 21
+    //XE = 22
+    TCompilerVersion.RSXE2  : result := '23';
+    TCompilerVersion.RSXE3  : result := '24';
+    TCompilerVersion.RSXE4  : result := '25';
+    TCompilerVersion.RSXE5  : result := '26';
+    TCompilerVersion.RSXE6  : result := '27';
+    TCompilerVersion.RSXE7  : result := '28';
+    TCompilerVersion.RSXE8  : result := '29';
     TCompilerVersion.RS10_0 : result := '30';
     TCompilerVersion.RS10_1 : result := '31';
     TCompilerVersion.RS10_2 : result := '32';
     TCompilerVersion.RS10_3 : result := '33';
     TCompilerVersion.RS10_4 : result := '34';
+    TCompilerVersion.RS11_0 : result := '35';
+    TCompilerVersion.RS12_0 : result := '36';
   else
     raise Exception.Create('BDSVersion is missing for : ' + CompilerToString(compiler));
   end;
@@ -451,11 +505,6 @@ begin
             result := true; //ambigous could be 10.1 Update 1 and Delphi 10.2
             versions := '10.1 Update 1 / 10.2';
           end;
-//          8 : //not confirmed.
-//          begin
-//            result := true; //ambigous could be 10.3.x or Delphi 10.4
-//            versions := '10.3 / 10.2';
-//          end;
         end;
       end;
   end;
@@ -518,7 +567,19 @@ begin
           5..8 : result := TCompilerVersion.RS10_3; //18.8 for 10.3.3
         end;
       end;
-    19 : result := TCompilerVersion.RS10_4; //TODO : this is assuming they will bump the version! Check this!!!
+    19 :
+    begin
+      begin
+        case minor of
+          0..2 : result := TCompilerVersion.RS10_4;
+          else //.3 is 11.0, .4 is ll.1, .5 is 11.2/3
+            result := TCompilerVersion.RS11_0;
+          end;
+        end;
+    end;
+    20 : result := TCompilerVersion.RS12_0;
+  else
+    raise EArgumentOutOfRangeException.Create('Unknown project version');
   end;
 end;
 

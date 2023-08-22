@@ -52,9 +52,10 @@ uses
 type
   IDPMProjectTreeManager = interface
   ['{F0BA2907-E337-4591-8E16-FB684AE2E19B}']
-    procedure NotifyEndLoading();
-    procedure NotifyProjectLoaded(const fileName : string);
-    procedure NotifyProjectClosed(const fileName : string);
+    procedure EndLoading();
+    procedure ProjectLoaded(const fileName : string);
+    procedure ProjectClosed(const fileName : string);
+    procedure ProjectGroupClosed;
   end;
 
 const
@@ -83,10 +84,10 @@ type
 
   //procedure DumpInterfaces(AClass: TClass);
   protected
-    procedure NotifyProjectLoaded(const fileName : string);
-    procedure NotifyProjectClosed(const fileName : string);
-    procedure NotifyEndLoading();
-
+    procedure ProjectLoaded(const fileName : string);
+    procedure ProjectClosed(const fileName : string);
+    procedure EndLoading;
+    procedure ProjectGroupClosed;
 
     procedure WndProc(var msg: TMessage);
 
@@ -125,6 +126,10 @@ uses
   Vcl.ImgList,
   Vcl.Graphics,
   Vcl.Forms,
+  {$IF CompilerVersion >= 35.0}
+  Vcl.ImageCollection,
+  Vcl.VirtualImageList,
+  {$IFEND}
   DPM.Core.Constants,
   DPM.Core.Logging,
   DPM.Core.Options.Common,
@@ -261,48 +266,48 @@ end;
 
 function TDPMProjectTreeManager.EnsureProjectTree : boolean;
 var
- bitmap : TBitmap;
 
 // i: Integer;
  platform : TDPMPlatform;
- imageList : TCustomImageList;
+ {$IF CompilerVersion >= 35.0}
+ imageCollection : TImageCollection;
+ imageList : TVirtualImageList;
+ {$ELSE}
+ bitmap : TBitmap;
+ imageList : TCustomImageList; 
+ {$IFEND}
 begin
   if FVSTProxy <> nil then
     exit(true);
 
   result := false;
- //TODO : control name and class discovered via IDE Explorer https://www.davidghoyle.co.uk/WordPress - need to check it's the same for all supported versions of the IDE
   if FVSTProxy = nil then
   begin
+   //control name and class discovered via IDE Explorer https://www.davidghoyle.co.uk/WordPress - need to check it's the same for each new IDE version
     FProjectTreeInstance := FindIDEControl('TVirtualStringTree', 'ProjectTree2');
     if FProjectTreeInstance <> nil then
     begin
       FVSTProxy := TVirtualStringTreeProxy.Create(FProjectTreeInstance, FLogger);
+       {$IF CompilerVersion < 35.0}
       imageList := FVSTProxy.Images;
+      {$ELSE}
+      imageList := TVirtualImageList(FVSTProxy.Images);
+      {$IFEND}
 
-      //peeking at the images to work out indexes
-//      for i := imageList.Count-1 downto imageList.Count-15  do
-//      begin
-//       bitmap:= TBitmap.Create;
-//       try
-//         imageList.GetBitmap(i, bitmap);
-//         bitmap.SaveToFile('c:\temp\project-tree' + IntToStr(i) + '.bmp');
-//       finally
-//         bitmap.Free;
-//       end;
-//      end;
       for platform := Low(TDPMPlatform) to High(TDPMPlatform) do
         FPlatformImageIndexes[platform] := -1;
 
-
       Result := true;
+      {$IF CompilerVersion < 35.0}
+      //10.4 and earlier
+      
       bitmap := TBitmap.Create;
       try
-        bitmap.LoadFromResourceName(HInstance, 'DPMIDELOGO_16');
+        bitmap.LoadFromResourceName(HInstance, 'DPMLOGOBMP_16');
         FDPMImageIndex := imageList.AddMasked(bitmap, clFuchsia);
         bitmap.LoadFromResourceName(HInstance, 'PLATFORM_WIN32');
         FPlatformImageIndexes[TDPMPlatform.Win32] := imageList.AddMasked(bitmap, clFuchsia);
-        bitmap.LoadFromResourceName(HInstance, 'PLATFORM_WIN64');
+        bitmap.LoadFromResourceName(HInstance, 'PLATFORM_WIN32'); //same for win32/64
         FPlatformImageIndexes[TDPMPlatform.Win64] := imageList.AddMasked(bitmap, clFuchsia);
         bitmap.LoadFromResourceName(HInstance, 'PLATFORM_MACOS');
         FPlatformImageIndexes[TDPMPlatform.OSX32] := imageList.AddMasked(bitmap, clFuchsia);
@@ -324,8 +329,36 @@ begin
       finally
         bitmap.Free;
       end;
+      {$ELSE}
+      //11.x and later uses an imagecollection so it's easy to lookup the built in images and use those.
+      //just need to add our logo image to the collection and then the image list.
+      imageCollection :=  TImageCollection(TVirtualImageList(imageList).ImageCollection);
+      imageCollection.Add('DPM\DPMLOGO', HInstance, 'DPMLOGO', ['_16','_24','_32']);
+      imageList.Add('DPM\DPMLOGO','DPM\DPMLOGO');
 
+      //TODO : This sometimes doesn't work and we end up with the wrong icon. Only seems to happen'
+      // when loading large project groups.
+      FDPMImageIndex := imageList.GetIndexByName('DPM\DPMLOGO');
 
+      FPlatformImageIndexes[TDPMPlatform.Win32] := imageList.GetIndexByName('Platforms\PlatformWindows');
+      FPlatformImageIndexes[TDPMPlatform.Win64] := FPlatformImageIndexes[TDPMPlatform.Win32];
+
+      FPlatformImageIndexes[TDPMPlatform.OSX32] := imageList.GetIndexByName('Platforms\PlatformMacOS');
+      FPlatformImageIndexes[TDPMPlatform.OSX64] := FPlatformImageIndexes[TDPMPlatform.OSX32];
+
+      FPlatformImageIndexes[TDPMPlatform.AndroidArm32] := imageList.GetIndexByName('Platforms\PlatformAndroid');
+      FPlatformImageIndexes[TDPMPlatform.AndroidArm64] := FPlatformImageIndexes[TDPMPlatform.AndroidArm32];
+      FPlatformImageIndexes[TDPMPlatform.AndroidIntel32] := FPlatformImageIndexes[TDPMPlatform.AndroidArm32];
+      FPlatformImageIndexes[TDPMPlatform.AndroidIntel64] := FPlatformImageIndexes[TDPMPlatform.AndroidArm32];
+
+      FPlatformImageIndexes[TDPMPlatform.iOS32] := imageList.GetIndexByName('Platforms\PlatformiOS');
+      FPlatformImageIndexes[TDPMPlatform.iOS64] := FPlatformImageIndexes[TDPMPlatform.iOS32];
+
+      FPlatformImageIndexes[TDPMPlatform.LinuxIntel32] := imageList.GetIndexByName('Platforms\PlatformLinux');
+      FPlatformImageIndexes[TDPMPlatform.LinuxIntel64] := FPlatformImageIndexes[TDPMPlatform.LinuxIntel32];
+      FPlatformImageIndexes[TDPMPlatform.LinuxArm32] := FPlatformImageIndexes[TDPMPlatform.LinuxIntel32];
+      FPlatformImageIndexes[TDPMPlatform.LinuxArm64] := FPlatformImageIndexes[TDPMPlatform.LinuxIntel32];
+      {$IFEND}
     end;
   end;
 end;
@@ -438,7 +471,7 @@ begin
   end;
 end;
 
-procedure TDPMProjectTreeManager.NotifyEndLoading;
+procedure TDPMProjectTreeManager.EndLoading;
 begin
   if not FOptions.AddDPMToProjectTree then
     exit;
@@ -446,7 +479,7 @@ begin
   PostMessage(FWindowHandle, WM_PROJECTLOADED, 0,0);
 end;
 
-procedure TDPMProjectTreeManager.NotifyProjectClosed(const fileName: string);
+procedure TDPMProjectTreeManager.ProjectClosed(const fileName: string);
 //var
 //  projectContainer : TProjectTreeContainer;
 begin
@@ -464,13 +497,18 @@ begin
 //  end;
 end;
 
-procedure TDPMProjectTreeManager.NotifyProjectLoaded(const fileName: string);
+procedure TDPMProjectTreeManager.ProjectLoaded(const fileName: string);
 begin
   if not FOptions.AddDPMToProjectTree then
     exit;
   //The project tree nodes do not seem to have been added at this stage
   //just enqueue the project, and we'll deal with it when all projects are loaded.
   FProjectLoadList.Enqueue(fileName);
+end;
+
+procedure TDPMProjectTreeManager.ProjectGroupClosed;
+begin
+  FNodeCache.Clear;
 end;
 
 function TDPMProjectTreeManager.TryGetContainerTreeNode(const container: TProjectTreeContainer; out containerNode: PVirtualNode): boolean;
@@ -512,7 +550,7 @@ var
   dpmChildren : IInterfaceList;
   platformSortedList : TStringList;
   i : integer;
-  platformPackageReferences : IGraphNode;
+  platformPackageReferences : IPackageReference;
 
   function FindProject : IOTAProject;
   var
@@ -553,25 +591,25 @@ var
   end;
 
 
-  procedure AddPlatform(const pf : TDPMPlatform; const PackageReferences : IGraphNode);
+  procedure AddPlatform(const pf : TDPMPlatform; const PackageReferences : IPackageReference);
   var
     platformContainer : TProjectTreeContainer;
-    packageRef : IGraphNode;
+    packageRef : IPackageReference;
 
-    procedure AddPackage(const parentContainer : TProjectTreeContainer; const packageReference : IGraphNode; const children : IInterfaceList);
+    procedure AddPackage(const parentContainer : TProjectTreeContainer; const packageReference : IPackageReference; const children : IInterfaceList);
     var
       packageRefContainer : TProjectTreeContainer;
-      depRef : IGraphNode;
+      depRef : IPackageReference;
     begin
       packageRefContainer := TProjectTreeContainer.CreateNewContainer(parentContainer, packageReference.ToIdVersionString,cDPMContainer);
       packageRefContainer.ImageIndex := -1;
       AddChildContainer(parentContainer, packageRefContainer);
       children.Add(packageRefContainer);
 
-      if packageReference.HasChildren then
+      if packageReference.HasDependencies then
       begin
         packageRefContainer.Children := TInterfaceList.Create;
-        for depRef in packageReference.ChildNodes do
+        for depRef in packageReference.Dependencies do
         begin
           AddPackage(packageRefContainer, depRef, packageRefContainer.Children);
         end;
@@ -584,12 +622,12 @@ var
     AddChildContainer(dpmContainer, platformContainer);
     dpmChildren.Add(platformContainer);
 
-    if PackageReferences.HasChildren then
+    if PackageReferences.HasDependencies then
     begin
       platformContainer.Children := TInterfaceList.Create;
 
       //using for loop rather the enumerator for per reasons.
-      for packageRef in PackageReferences.ChildNodes do
+      for packageRef in PackageReferences.Dependencies do
       begin
         if packageRef.Platform <> pf then
           continue;

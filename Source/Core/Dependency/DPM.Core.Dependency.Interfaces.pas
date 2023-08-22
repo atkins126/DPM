@@ -31,24 +31,25 @@ interface
 uses
   Spring.Collections,
   System.Classes,
-  VSoft.Awaitable,
+  VSoft.CancellationToken,
   DPM.Core.Logging,
   DPM.Core.Types,
   DPM.Core.Options.Search,
+  DPM.Core.Configuration.Interfaces,
   DPM.Core.Package.Interfaces,
   DPM.Core.Dependency.Version;
 
 type
-  IGraphNode = interface;
+  IPackageReference = interface;
 
-  TNodeVisitProc = reference to procedure(const node : IGraphNode);
+  TNodeVisitProc = reference to procedure(const packageReference : IPackageReference);
 
   //a directed asyclic graph (DAG).
-  IGraphNode = interface(IPackageId)
+  IPackageReference = interface(IPackageId)
     ['{20055C26-8E63-4936-8249-ACF8514A37E7}']
-//    function GetLevel : integer;
     function GetId : string;
-    function GetParent : IGraphNode;
+    function GetParent : IPackageReference;
+    procedure SetParent(const value : IPackageReference);
     function GetVersion : TPackageVersion;
     procedure SetVersion(const value : TPackageVersion);
 
@@ -61,52 +62,55 @@ type
     function GetBplPath : string;
     procedure SetBplPath(const value : string);
     procedure SetUseSource(const value : boolean);
+    procedure SetProjectFile(const value : string);
 
-
-    function GetChildNodes : IEnumerable<IGraphNode>;
+    function GetDependencies : IEnumerable<IPackageReference>;
 
     function GetPlatform : TDPMPlatform;
     function GetUseSource : boolean;
     function GetIsTransitive : boolean;
+    function GetProjectFile : string;
 
-
-    function AddChildNode(const id : string; const version : TPackageVersion; const selectedOn : TVersionRange) : IGraphNode;
+    function AddPackageDependency(const id : string; const version : TPackageVersion; const selectedOn : TVersionRange) : IPackageReference;
+    procedure AddExistingReference(const id : string; const packageReference : IPackageReference);
     ///
     /// Breadth first search
-    function FindFirstNode(const id : string) : IGraphNode;
-    function FindNodes(const id : string) : IList<IGraphNode>;
+    function FindFirstPackageReference(const id : string) : IPackageReference;
+    function FindPackageReferences(const id : string) : IList<IPackageReference>;
 
-    /// <summary> Searches this node only
+    /// <summary> Searches this reference only
     /// </summary>
-    function FindChild(const id : string) : IGraphNode;
+    function FindDependency(const id : string) : IPackageReference;
+    function HasTopLevelDependency(const id : string) : boolean;
+    function HasAnyDependency(const id : string) : boolean;
+    function Clone : IPackageReference;
 
     //removes any child with id recursively (and it's children)
-    procedure Prune(const id : string);
-    function RemoveNode(const node : IGraphNode) : boolean;
+    function RemovePackageReference(const packageReference : IPackageReference) : boolean;
+    function RemoveTopLevelPackageReference(const id : string) : boolean;
+
     function IsRoot : boolean;
-    function IsTopLevel : boolean;
-    function HasChildren : boolean;
+    function HasDependencies : boolean;
     procedure VisitDFS(const visitor : TNodeVisitProc);
 
     function ToIdVersionString : string;
+
     //used by BOM check
-    function AreEqual(const otherNode : IGraphNode; const depth : integer = 1) : boolean;
+    function AreEqual(const otherPackageReference : IPackageReference; const depth : integer = 1) : boolean;
 
     property Id : string read GetId;
     property SelectedOn : TVersionRange read GetSelectedOn write SetSelectedOn;
-//    property Level : integer read GetLevel;
     property IsTransitive : boolean read GetIsTransitive;
-    property ChildNodes : IEnumerable<IGraphNode>read GetChildNodes;
-    property Parent : IGraphNode read GetParent;
+    property Dependencies : IEnumerable<IPackageReference>read GetDependencies;
+    property Parent : IPackageReference read GetParent;
     property Platform : TDPMPlatform read GetPlatform;
     property UseSource : boolean read GetUseSource write SetUseSource;
+    property ProjectFile : string read GetProjectFile write SetProjectFile;
 
     //build support
     property SearchPaths : IList<string> read GetSearchPaths;
     property LibPath : string read GetLibPath write SetLibPath;
     property BplPath : string read GetBplPath write SetBplPath;
-
-
   end;
 
 
@@ -116,10 +120,16 @@ type
     function GetParentId : string;
     function GetVersionRange : TVersionRange;
     procedure SetVersionRange(const value : TVersionRange);
+    function GetProject : string;
+    function GetIsTopLevel : boolean;
 
+    function Clone(const parentId : string) : IResolution;
+
+    property IsTopLevel : boolean read GetIsTopLevel;
     property Package : IPackageInfo read GetPackage;
     property VersionRange : TVersionRange read GetVersionRange write SetVersionRange;
     property ParentId : string read GetParentId;
+    property Project : string read GetProject;
   end;
 
   TProjectReference = record
@@ -130,9 +140,10 @@ type
 
   IDependencyResolver = interface
     ['{B187F0DB-FEA1-48B4-81F2-CECF073C2FB0}']
+    function Initialize(const config : IConfiguration) : boolean;
     //returns true if all dependencies were resolved. If true, the graph is fully populated and can be serialized.
-    function ResolveForInstall(const cancellationToken : ICancellationToken; const options : TSearchOptions; const newPackage : IPackageInfo; const projectReferences : IList<TProjectReference>; var dependencyGraph : IGraphNode; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; out resolved : IList<IPackageInfo>) : boolean;
-    function ResolveForRestore(const cancellationToken : ICancellationToken; const options : TSearchOptions; const projectReferences : IList<TProjectReference>; var dependencyGraph : IGraphNode; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; out resolved : IList<IPackageInfo>) : boolean;
+    function ResolveForInstall(const cancellationToken : ICancellationToken; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const projectFile : string; const options : TSearchOptions; const newPackage : IPackageInfo; const projectReferences : IList<TProjectReference>; var dependencyGraph : IPackageReference; out resolved : IList<IPackageInfo>) : boolean;
+    function ResolveForRestore(const cancellationToken : ICancellationToken; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const projectFile : string; const options : TSearchOptions; const projectReferences : IList<TProjectReference>; var dependencyGraph : IPackageReference; out resolved : IList<IPackageInfo>) : boolean;
   end;
 
 

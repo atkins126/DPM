@@ -51,11 +51,11 @@ uses
   DPM.Core.Spec,
   DPM.Core.Spec.Reader,
   DPM.Core.Package.Interfaces,
+  DPM.Core.Package.Installer.Interfaces,
   DPM.Core.Package.Installer,
   DPM.Core.Package.InstallerContext,
   DPM.Core.Sources.Interfaces,
   DPM.Core.Sources.Manager,
-  DPM.Core.Sources.ClientFactory,
   DPM.Core.Configuration.Interfaces,
   DPM.Core.Configuration.Manager,
   DPM.Core.Repository.Interfaces,
@@ -63,8 +63,6 @@ uses
   DPM.Core.Repository.Factory,
   DPM.Core.Repository.Directory,
   DPM.Core.Repository.Http,
-  DPM.Core.Repository.DPMGithub,
-  DPM.Core.Repository.DNGithub,
   DPM.Core.Cache.Interfaces,
   DPM.Core.Cache,
   DPM.Core.Dependency.Interfaces,
@@ -77,8 +75,8 @@ uses
 procedure InitCore(const container : TContainer; const overrideProc : TConstProc<TContainer>);
 begin
 
-  Container.RegisterType<IPackageArchiveReader, TZipFileArchiveReader>('file.archive');
-  Container.RegisterType<IPackageArchiveReader, TFolderArchiveReader>('folder.archive');
+//  Container.RegisterType<IPackageArchiveReader, TZipFileArchiveReader>('file.archive');
+//  Container.RegisterType<IPackageArchiveReader, TFolderArchiveReader>('folder.archive');
 
   Container.RegisterType<IPackageArchiveWriter, TPackageArchiveWriter>;
 
@@ -96,25 +94,23 @@ begin
     overrideProc(container)
   else
   begin
-    Container.RegisterType<IPackageInstallerContext, TPackageInstallerContext>;
+    Container.RegisterType<IPackageInstallerContext, TCorePackageInstallerContext>;
   end;
+
   Container.RegisterType<IPackageInstaller, TPackageInstaller>;
 
 
   Container.RegisterType<IConfigurationManager, TConfigurationManager>;
 
   Container.RegisterType<ISourcesManager, TSourcesManager>;
-  Container.RegisterType<ISourceClientFactory, TClientFactory>;
 
   Container.RegisterType<IPackageRepositoryFactory, TPackageRepositoryFactory>;
-  Container.RegisterType<IPackageRepositoryManager, TPackageRepositoryManager>;
+  Container.RegisterType<IPackageRepositoryManager, TPackageRepositoryManager>().AsSingleton();
 
   Container.RegisterType<IPackageRepository, TDirectoryPackageRepository>(TEnumUtils.EnumToString<TSourceType>(TSourceType.Folder));
   Container.RegisterType<IPackageRepository, TDPMServerPackageRepository>(TEnumUtils.EnumToString<TSourceType>(TSourceType.DPMServer));
-  Container.RegisterType<IPackageRepository, TDPMGithubPackageRepository>(TEnumUtils.EnumToString<TSourceType>(TSourceType.DPMGithub));
-  Container.RegisterType<IPackageRepository, TDNGithubPackageRepository>(TEnumUtils.EnumToString<TSourceType>(TSourceType.DNGithub));
 
-  Container.RegisterType<IPackageCache, TPackageCache>;
+  Container.RegisterType<IPackageCache, TPackageCache>.AsSingleton();
 
   Container.RegisterType<IDependencyResolver, TDependencyResolver>;
 

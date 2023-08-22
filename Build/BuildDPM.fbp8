@@ -7,6 +7,12 @@ begin
     targetid = {690B669B-13D0-48EC-AA58-B4191B4E9711}
     rootaction
     begin
+      action.variables.logvalues
+      begin
+        failifnotdefined = true
+        id = {C91D1102-DD91-48F7-892A-ABBC41C474CB}
+        logallvariables = true
+      end
       action.propertyset.define
       begin
         id = {3436CDF6-12A6-48A9-B064-0EC65D055F94}
@@ -15,11 +21,10 @@ begin
         begin
           legalcopyright = "© 2019 -2021 Vincent Parrett and Contributors"
           linkproductversion = false
-          minorversion = 1
+          minorversion = 2
           name = DPMVersion
           productname = "DPM Package Manager"
-          productversionstring = 0.1.10-alpha
-          releaseversion = 10
+          productversionstring = 0.2.0-alpha
         end
       end
       action.propertyset.setvalues
@@ -103,7 +108,7 @@ begin
       end
       action.group
       begin
-        description = "Build Tests - 10.4"
+        description = "Build Tests - 11.0"
         id = {6BFDB7C5-1968-4220-9E27-9899822374AA}
         action.continua.set-buildstatus
         begin
@@ -130,7 +135,7 @@ begin
           terminateontimeout = true
           timeoutlength = 2
           as.projectpath = %SRC_ROOT%\\DPM.Core.Tests.dproj
-          as.compilerversion = 10.4
+          as.compilerversion = 11.0
           as.verbosity = Debug
           as.nobanner = True
         end
@@ -148,7 +153,7 @@ begin
           compileridl = true
           configname = Release
           debugversionnumbers = false
-          delphiversion = Delphi10_4
+          delphiversion = Delphi11
           enabletimeout = false
           eurekalogverboselogging = false
           frameworktype = VCL
@@ -307,7 +312,7 @@ begin
           terminateontimeout = true
           timeoutlength = 2
           as.projectpath = %SRC_ROOT%\\dpm.dproj
-          as.compilerversion = 10.4
+          as.compilerversion = 11.0
           as.verbosity = Debug
           as.nobanner = True
         end
@@ -325,7 +330,7 @@ begin
           compileridl = true
           configname = Release
           debugversionnumbers = false
-          delphiversion = Delphi10_4
+          delphiversion = Delphi11
           enabletimeout = false
           eurekalogverboselogging = false
           frameworktype = VCL
@@ -345,13 +350,13 @@ begin
           locale = 3081
           majorversion = 0
           manifestfile = %SRC_ROOT%\\dpmManifest.xml
-          minorversion = 1
+          minorversion = 2
           noconfig = false
           platform = Win32
           platformsdktype = ProjectSDK
           projectfile = %SRC_ROOT%\\dpm.dpr
           regenerateresource = true
-          releaseversion = 10
+          releaseversion = 0
           resourcecompilertype = rcBorland
           ridloutputsamefolder = true
           startingdir = %SRC_ROOT%\\
@@ -367,7 +372,7 @@ begin
           verboseoutput = false
           versioninfokeys = "LegalCopyright\=© 2019 -2021 Vincent Parrett and Contributors" +
                             "ProductName\=DPM Package Manager" +
-                            "ProductVersion\=0.1.10-alpha" +
+                            "ProductVersion\=0.2.0-alpha" +
                             ""
           versioninfopropertysetname = DPMVersion
           warningsaserror = false
@@ -452,9 +457,7 @@ begin
         action.target.execute
         begin
           actionlistid = {CD2E679B-668B-4181-B51E-32647A974CED}
-          failifactionlistempty = false
           id = {F48903DA-1B21-46BE-9DBB-F5EBF27F6108}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -478,9 +481,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] XE2"
-          failifactionlistempty = false
           id = {E18926BA-E666-419A-9D6F-C51CA9EE782F}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -499,9 +500,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] XE3"
-          failifactionlistempty = false
           id = {2CF3AEA0-9248-4729-8141-BB48ED280D44}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -520,9 +519,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] XE4"
-          failifactionlistempty = false
           id = {CD8E6AAE-D083-479B-A611-4420C36F97DF}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -541,9 +538,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] XE5"
-          failifactionlistempty = false
           id = {B13232A7-8656-417C-BD5F-C30E531F145D}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -562,9 +557,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] XE6"
-          failifactionlistempty = false
           id = {1DF7D7D0-75AC-46F2-A029-BCF72F6A55BB}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -583,9 +576,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] XE7"
-          failifactionlistempty = false
           id = {CD063CBA-E2A0-41AF-A5F7-BB1B2761C7F8}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -604,9 +595,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] XE8"
-          failifactionlistempty = false
           id = {1487745C-9D1E-4CDC-9A2F-CE806907A044}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -625,9 +614,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] 10.0 Seattle"
-          failifactionlistempty = false
           id = {F5B4093C-AA0A-4AE2-93C7-CEF205E59FC8}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -646,9 +633,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] 10.1 Berlin"
-          failifactionlistempty = false
           id = {677BEFF9-7E75-4E78-B109-45F058B81596}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -667,9 +652,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] 10.2 Tokyo"
-          failifactionlistempty = false
           id = {68C01FBE-D970-43C1-BBE0-06900CE906FD}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -688,9 +671,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] 10.3 Rio"
-          failifactionlistempty = false
           id = {0E2307E8-90DE-4B65-BFD4-0C72BFC0EB32}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -709,9 +690,7 @@ begin
         begin
           actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
           description = "Run Target [ BuildForCompiler ] 10.4 Sydney"
-          failifactionlistempty = false
           id = {BAE83770-9957-4993-8537-17CD779D2852}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -722,6 +701,25 @@ begin
             target.argvalue
             begin
               value = DPM.IDE.D104.dpr
+              variablename = ProjectFile
+            end
+          end
+        end
+        action.target.execute
+        begin
+          actionlistid = {1534FD4E-ABBF-4A37-BB48-93C387954C40}
+          description = "Run Target [ BuildForCompiler ] 11 Alexandria"
+          id = {418A387E-DF1B-4F4B-8815-500E563C96EA}
+          target.argvalues
+          begin
+            target.argvalue
+            begin
+              value = Delphi11
+              variablename = CompilerVersion
+            end
+            target.argvalue
+            begin
+              value = DPM.IDE.D110.dpr
               variablename = ProjectFile
             end
           end
@@ -777,9 +775,7 @@ begin
         action.target.execute
         begin
           actionlistid = {CD2E679B-668B-4181-B51E-32647A974CED}
-          failifactionlistempty = false
           id = {59923895-F98A-4386-AEE4-30A7608338D0}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -838,7 +834,7 @@ begin
         terminateontimeout = true
         timeoutlength = 2
         as.projectpath = %SRC_ROOT%\\%ProjectFile%oj
-        as.compilerversion = XE4
+        as.compilerversion = XE7
         as.verbosity = Debug
         as.nobanner = True
         action.script
@@ -866,7 +862,7 @@ begin
         compileridl = true
         configname = Release
         debugversionnumbers = false
-        delphiversion = DelphiXE4
+        delphiversion = DelphiXE7
         enabletimeout = false
         eurekalogverboselogging = false
         frameworktype = VCL
@@ -885,13 +881,13 @@ begin
         locale = 3081
         majorversion = 0
         manifestfile = %SRC_ROOT%\\dpmManifest.xml
-        minorversion = 1
+        minorversion = 2
         noconfig = false
         platform = Win32
         platformsdktype = ProjectSDK
         projectfile = %SRC_ROOT%\\%ProjectFile%
         regenerateresource = true
-        releaseversion = 10
+        releaseversion = 0
         resourcecompilertype = rcBorland
         ridloutputsamefolder = true
         startingdir = %SRC_ROOT%\\
@@ -907,7 +903,7 @@ begin
         verboseoutput = false
         versioninfokeys = "LegalCopyright\=© 2019 -2021 Vincent Parrett and Contributors" +
                           "ProductName\=DPM Package Manager" +
-                          "ProductVersion\=0.1.10-alpha" +
+                          "ProductVersion\=0.2.0-alpha" +
                           ""
         versioninfopropertysetname = DPMVersion
         warningsaserror = false
@@ -1040,9 +1036,7 @@ begin
         action.target.execute
         begin
           actionlistid = {CD2E679B-668B-4181-B51E-32647A974CED}
-          failifactionlistempty = false
           id = {A6B3126A-905F-45F8-B3E3-B78EDA218F63}
-          resetdependencychain = false
           target.argvalues
           begin
             target.argvalue
@@ -1303,7 +1297,7 @@ begin
   end
   variable
   begin
-    defaultvalue = 1
+    defaultvalue = 2
     groupname = VersionInfo
     name = MINOR_VERSION
     variablescope = vtProject
@@ -1343,7 +1337,7 @@ begin
   end
   variable
   begin
-    defaultvalue = 10
+    defaultvalue = 0
     groupname = VersionInfo
     name = RELEASE_VERSION
     variablescope = vtProject
@@ -1358,7 +1352,7 @@ begin
   end
   variable
   begin
-    defaultvalue = %MAJOR_VERSION%.%MINOR_VERSION%.%RELEASE_VERSION%-%PRERELEASE_LABEL%
+    defaultvalue = %MAJOR_VERSION%.%MINOR_VERSION%.%RELEASE_VERSION%%PRERELEASE_LABEL%
     groupname = VersionInfo
     name = SemVer
     variablescope = vtProject

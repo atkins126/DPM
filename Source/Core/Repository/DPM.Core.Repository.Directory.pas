@@ -36,45 +36,60 @@ uses
   DPM.Core.Dependency.Version,
   DPM.Core.Logging,
   DPM.Core.Options.Search,
+  DPM.Core.Options.Push,
+  DPM.Core.Spec.Interfaces,
   DPM.Core.Package.Interfaces,
   DPM.Core.Configuration.Interfaces,
   DPM.Core.Repository.Interfaces,
   DPM.Core.Repository.Base;
 
-//TODO : makes this work for structured folders too
-//eg : \Vsoft.AntPattterns\Win32
-//     \Vsoft.AntPatterns\Win64
-// see https://docs.microsoft.com/en-au/nuget/reference/cli-reference/cli-ref-add
-
-
 type
+  TReadSpecFunc = reference to function(const name : string; const spec : IPackageSpec) : IInterface;
+
   TDirectoryPackageRepository = class(TBaseRepository, IPackageRepository)
   private
     FPermissionsChecked : boolean;
     FIsWritable : boolean;
   protected
-    function DoGetPackageInfo(const cancellationToken : ICancellationToken; const fileName : string) : IPackageInfo; overload;
-    function DoGetPackageMetaData(const cancellationToken : ICancellationToken; const fileName : string) : IPackageMetadata;
+    function DoGetPackageMetaData(const cancellationToken : ICancellationToken; const fileName : string; const readSpecFunc : TReadSpecFunc) : IInterface;
 
 
     function DoList(searchTerm : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) : IList<string>;
     function DoExactList(const id : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const version : string) : IList<string>;
 
-    function DoGetPackageFeedFiles(const options : TSearchOptions; searchTerm : string) : IList<string>;
+    function DoGetPackageFeedFiles(const searchTerm : string; const exact : boolean; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) : IList<string>;
     function DoGetPackageFeed(const cancelToken : ICancellationToken; const options : TSearchOptions; const files : IList<string>) : IList<IPackageSearchResultItem>;
 
-    function List(const cancellationToken : ICancellationToken; const options : TSearchOptions) : IList<IPackageIdentity>; overload;
 
     function DownloadPackage(const cancellationToken : ICancellationToken; const packageMetadata : IPackageIdentity; const localFolder : string; var fileName : string) : boolean;
+
+    function FindLatestVersion(const cancellationToken : ICancellationToken; const id : string; const compilerVersion : TCompilerVersion; const version : TPackageVersion; const platform : TDPMPlatform; const includePrerelease : boolean) : IPackageIdentity;
+
 
     function GetPackageVersionsWithDependencies(const cancellationToken : ICancellationToken; const id : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const versionRange : TVersionRange; const preRelease : Boolean) : IList<IPackageInfo>;
 
     function GetPackageInfo(const cancellationToken : ICancellationToken; const packageId : IPackageId) : IPackageInfo; overload;
 
-    //ui stuff
-    function GetPackageVersions(const cancellationToken : ICancellationToken; const id : string; const compilerVersion : TCompilerVersion; const preRelease : boolean) : IList<TPackageVersion>; overload;
-    function GetPackageFeed(const cancelToken : ICancellationToken; const options : TSearchOptions; const configuration : IConfiguration) : IList<IPackageSearchResultItem>;
+//    function GetPackageLatestVersions(const cancellationToken : ICancellationToken; const ids : IList<IPackageId>; const platform : TDPMPlatform; const compilerVersion : TCompilerVersion) : IDictionary<string, IPackageLatestVersionInfo>;
+
+    function GetPackageLatestVersion(const cancellationToken : ICancellationToken; const id : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) : IPackageLatestVersionInfo;
+
+    function GetPackageMetaData(const cancellationToken : ICancellationToken; const packageId : string; const packageVersion : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) : IPackageSearchResultItem;
+
+
+    function GetPackageVersions(const cancellationToken : ICancellationToken; const id : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const preRelease : boolean) : IList<TPackageVersion>; overload;
+
+    function GetPackageFeed(const cancelToken : ICancellationToken; const options : TSearchOptions; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) : IPackageSearchResult;
+
+    function GetPackageFeedByIds(const cancellationToken : ICancellationToken;  const ids : IList<IPackageId>; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) :  IPackageSearchResult;
+
+
     function GetPackageIcon(const cancelToken : ICancellationToken; const packageId : string; const packageVersion : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) : IPackageIcon;
+
+    //commands
+    function Push(const cancellationToken : ICancellationToken; const pushOptions : TPushOptions): Boolean;
+    function List(const cancellationToken : ICancellationToken; const options : TSearchOptions) : IList<IPackageListItem>; overload;
+
 
   public
     constructor Create(const logger : ILogger); override;
@@ -94,12 +109,12 @@ uses
   DPM.Core.Constants,
   DPM.Core.Package.Metadata,
   DPM.Core.Package.Icon,
-  DPM.Core.Spec.Interfaces,
   DPM.Core.Spec.Reader,
   DPM.Core.Utils.Strings,
   DPM.Core.Utils.Path,
   DPM.Core.Utils.Directory,
-  DPM.Core.Package.SearchResults;
+  DPM.Core.Package.SearchResults,
+  DPM.Core.Package.ListItem, DPM.Core.Package.PackageLatestVersionInfo;
 
 { TDirectoryPackageRespository }
 
@@ -140,7 +155,7 @@ var
   destFile : string;
 begin
   result := false;
-  sourceFile := IncludeTrailingPathDelimiter(Source) + packageMetadata.ToString + cPackageFileExt;
+  sourceFile := IncludeTrailingPathDelimiter(SourceUri) + packageMetadata.ToString + cPackageFileExt;
   if not FileExists(sourceFile) then
   begin
     Logger.Error('File not found in repository [' + sourceFile + ']');
@@ -151,9 +166,11 @@ begin
     destFile := TPath.GetFullPath(destFile);
   try
     ForceDirectories(ExtractFilePath(destFile));
+    Logger.Information('GET ' + sourceFile);
     TFile.Copy(sourceFile, destFile, true);
     fileName := destFile;
     result := true;
+    Logger.Information('OK ' + sourceFile);
   except
     on e : Exception do
     begin
@@ -161,11 +178,65 @@ begin
     end;
   end;
 end;
-//
-//function TDirectoryPackageRepository.GetPackageMetaData(const packageIdentity : IPackageIdentity): IPackageMetadata;
-//begin
-//  result := DoGetPackageMetaData(packageIdentity, packageIdentity.Platform);
-//end;
+
+
+
+function TDirectoryPackageRepository.FindLatestVersion(const cancellationToken: ICancellationToken; const id: string; const compilerVersion: TCompilerVersion; const version: TPackageVersion; const platform: TDPMPlatform; const includePrerelease : boolean): IPackageIdentity;
+var
+  searchFiles : IList<string>;
+  regex : TRegEx;
+  searchRegex : string;
+  packageFile : string;
+  match : TMatch;
+  i : integer;
+  maxVersion : TPackageVersion;
+  packageVersion : TPackageVersion;
+  maxVersionFile : string;
+begin
+  result := nil;
+  if version.IsEmpty then
+    searchFiles := DoExactList(id, compilerVersion, platform, '')
+  else
+    searchFiles := DoExactList(id, compilerVersion, platform, version.ToStringNoMeta);
+
+  searchRegEx := GetSearchRegex(compilerVersion, [], '');
+  regex := TRegEx.Create(searchRegEx, [roIgnoreCase]);
+  maxVersion := TPackageVersion.Empty;
+  for i := 0 to searchFiles.Count - 1 do
+  begin
+    packageFile := searchFiles[i];
+    //ensure that the files returned are actually packages
+    packageFile := ChangeFileExt(ExtractFileName(packageFile), '');
+    match := regex.Match(packageFile);
+    if match.Success then
+    begin
+      if not TPackageVersion.TryParse(match.Groups[4].Value, packageVersion) then
+        continue;
+
+      if (not includePrerelease) and (not packageVersion.IsStable)  then
+        continue;
+      //if we wanted a specific version, then we have found it.
+      if not version.IsEmpty then
+      begin
+        maxVersionFile := packageFile;
+        maxVersion := version;
+        Break;
+      end;
+
+
+      if packageVersion > maxVersion then
+      begin
+        maxVersion := packageVersion;
+        maxVersionFile := packageFile;
+      end;
+    end;
+  end;
+
+  if maxVersion.IsEmpty then
+    exit;
+  result := TPackageIdentity.Create(Self.Name, id, maxVersion, compilerVersion, platform);
+
+end;
 
 function TDirectoryPackageRepository.GetPackageIcon(const cancelToken : ICancellationToken; const packageId, packageVersion : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) : IPackageIcon;
 var
@@ -181,7 +252,7 @@ var
 begin
   result := nil;
   packagFileName := Format('%s-%s-%s-%s.dpkg', [packageId, CompilerToString(compilerVersion), DPMPlatformToString(platform), packageVersion]);
-  packagFileName := TPath.Combine(Self.Source, packagFileName);
+  packagFileName := TPath.Combine(Self.SourceUri, packagFileName);
   svgIconFileName := ChangeFileExt(packagFileName, '.svg');
   pngIconFileName := ChangeFileExt(packagFileName, '.png');
 
@@ -264,29 +335,40 @@ end;
 
 function TDirectoryPackageRepository.GetPackageInfo(const cancellationToken : ICancellationToken; const packageId : IPackageId) : IPackageInfo;
 var
-  packagFileName : string;
+  packageFileName : string;
+  readSpecFunc : TReadSpecFunc;
 begin
   result := nil;
-  packagFileName := Format('%s-%s-%s-%s.dpkg', [packageId.Id, CompilerToString(packageId.CompilerVersion), DPMPlatformToString(packageId.Platform), packageId.Version.ToStringNoMeta]);
-  packagFileName := IncludeTrailingPathDelimiter(Source) + packagFileName;
-  if not FileExists(packagFileName) then
+  packageFileName := Format('%s-%s-%s-%s.dpkg', [packageId.Id, CompilerToString(packageId.CompilerVersion), DPMPlatformToString(packageId.Platform), packageId.Version.ToStringNoMeta]);
+  packageFileName := IncludeTrailingPathDelimiter(SourceUri) + packageFileName;
+
+  if not FileExists(packageFileName) then
     exit;
   if cancellationToken.IsCancelled then
     exit;
 
-  result := DoGetPackageInfo(cancellationToken, packagFileName);
+  readSpecFunc := function (const name : string; const spec : IPackageSpec) : IInterface
+                  begin
+                    result := TPackageInfo.CreateFromSpec(name, spec);
+                  end;
+
+  result := DoGetPackageMetaData(cancellationToken, packageFileName, readSpecFunc) as IPackageInfo;
 end;
 
-function TDirectoryPackageRepository.GetPackageFeed(const cancelToken : ICancellationToken; const options : TSearchOptions; const configuration : IConfiguration) : IList<IPackageSearchResultItem>;
+
+function TDirectoryPackageRepository.GetPackageFeed(const cancelToken : ICancellationToken; const options : TSearchOptions; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) : IPackageSearchResult;
 var
   searchTerms : TArray<string>;
   i : integer;
-  //  repoResults : IList<IPackageSearchResultItem>;
+  results : IList<IPackageSearchResultItem>;
   searchFiles : IList<string>;
   allFiles : IList<string>;
   distinctFiles : IEnumerable<string>;
+//  take : integer;
 begin
-  result := TCollections.CreateList<IPackageSearchResultItem>;
+  Logger.Debug('TDirectoryPackageRepository.GetPackageFeed');
+  result := TDPMPackageSearchResult.Create(options.Skip,0);
+
   if options.CompilerVersion = TCompilerVersion.UnknownVersion then
     raise EArgumentException.Create('Compiler version must be set');
 
@@ -304,86 +386,167 @@ begin
   begin
     if cancelToken.IsCancelled then
       exit;
-    allFiles.AddRange(DoGetPackageFeedFiles(options, searchTerms[i]));
+    allFiles.AddRange(DoGetPackageFeedFiles(searchTerms[i], options.Exact, compilerVersion, platform));
   end;
 
-  distinctFiles := TDistinctIterator < string > .Create(allFiles, TStringComparer.OrdinalIgnoreCase);
-  if options.Skip > 0 then
-    distinctFiles := distinctFiles.Skip(options.Skip);
-  if options.Take > 0 then
-    distinctFiles := distinctFiles.Take(options.Take);
-  searchFiles := TCollections.CreateList < string > (distinctFiles);
+  distinctFiles := TDistinctIterator<string>.Create(allFiles, TStringComparer.OrdinalIgnoreCase);
+//  if options.Skip > 0 then
+//    distinctFiles := distinctFiles.Skip(options.Skip);
+//  if options.Take > 0 then
+//    distinctFiles := distinctFiles.Take(options.Take);
+  searchFiles := TCollections.CreateList<string>(distinctFiles);
 
-  result := DoGetPackageFeed(cancelToken, options, searchFiles);
-
+  results := DoGetPackageFeed(cancelToken, options, searchFiles);
+  result.Results.AddRange(results);
 
 end;
 
 
-function TDirectoryPackageRepository.DoGetPackageInfo(const cancellationToken : ICancellationToken; const fileName : string) : IPackageInfo;
+function TDirectoryPackageRepository.GetPackageLatestVersion(const cancellationToken : ICancellationToken; const id : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform ) : IPackageLatestVersionInfo;
 var
-  zipFile : TZipFile;
-  metaBytes : TBytes;
-  metaString : string;
-  spec : IPackageSpec;
-  reader : IPackageSpecReader;
-  extractedFile : string;
+  i : integer;
+  searchFiles : IList<string>;
+  regex : TRegEx;
+  searchRegex : string;
+  packageFile : string;
+  match : TMatch;
+  packageVersion : TPackageVersion;
+  latestVersion  : TPackageVersion;
+  latestStableVersion : TPackageVersion;
 begin
-  reader := TPackageSpecReader.Create(Logger);
-
-  //first see if the spec has been extracted already.
-  extractedFile := ChangeFileExt(fileName, '.dspec');
-  if FileExists(extractedFile) then
-  begin
-    spec := reader.ReadSpec(extractedFile);
-    if spec <> nil then
-    begin
-      result := TPackageInfo.CreateFromSpec(Name, spec);
-      exit;
-    end;
-
-  end;
-  //failed to read so try extract again
-
   result := nil;
-  zipFile := TZipFile.Create;
-  try
-    try
-      zipFile.Open(fileName, TZipMode.zmRead);
-      zipFile.Read(cPackageMetaFile, metaBytes);
-    except
-      on e : Exception do
-      begin
-        Logger.Error('Error opening package file [' + fileName + ']');
-        exit;
-      end;
-    end;
-  finally
-    zipFile.Free;
-  end;
-  //doing this outside the try/finally to avoid locking the package for too long.
-  metaString := TEncoding.UTF8.GetString(metaBytes);
-  spec := reader.ReadSpecString(metaString);
-  if spec = nil then
-    exit;
-  result := TPackageInfo.CreateFromSpec(Name, spec);
-  if not FPermissionsChecked then
-  begin
-    FIsWritable := TDirectoryUtils.IsDirectoryWriteable(ExtractFilePath(fileName));
-    FPermissionsChecked := true;
-  end;
+  searchRegEx := GetSearchRegex(compilerVersion, [], '');
+  regex := TRegEx.Create(searchRegEx, [roIgnoreCase]);
 
-  if FIsWritable then
+  searchFiles := DoExactList(id, compilerVersion, platform, '');
+  latestVersion := TPackageVersion.Empty;
+  latestStableVersion := TPackageVersion.Empty;
+  for i := 0 to searchFiles.Count -1 do
   begin
-    try
-      TFile.WriteAllText(extractedFile, metaString, TEncoding.UTF8);
-    except
-      //even though we test for write access other errors might occur (eg with network drives disconnected etc).
+    packageFile := ChangeFileExt(ExtractFileName(searchFiles[i]), '');
+    match := regex.Match(packageFile);
+    if match.Success then
+    begin
+      if not TPackageVersion.TryParse(match.Groups[4].Value, packageVersion) then
+        continue;
+
+      if packageVersion > latestVersion then
+        latestVersion := packageVersion;
+
+      if packageVersion.IsStable and (packageVersion > latestStableVersion) then
+        latestStableVersion := packageVersion;
     end;
+    //if latestVersion is empt then we didn't find any files!
   end;
+  if not latestVersion.IsEmpty then
+    result:= TDPMPackageLatestVersionInfo.Create(id,latestStableVersion, latestVersion);
 end;
 
-function TDirectoryPackageRepository.GetPackageVersions(const cancellationToken : ICancellationToken; const id : string; const compilerVersion : TCompilerVersion; const preRelease : boolean) : IList<TPackageVersion>;
+function TDirectoryPackageRepository.GetPackageFeedByIds(const cancellationToken: ICancellationToken; const ids: IList<IPackageId>; const compilerVersion: TCompilerVersion;
+  const platform: TDPMPlatform): IPackageSearchResult;
+var
+  item : IPackageId;
+  metaData : IPackageSearchResultItem;
+  latestVersionInfo : IPackageLatestVersionInfo;
+begin
+  result := TDPMPackageSearchResult.Create(0,0);
+  for item in ids do
+  begin
+      metaData := GetPackageMetaData(cancellationToken,item.Id, item.Version.ToString, compilerVersion, platform);
+      if metaData <> nil then
+      begin
+        latestVersionInfo := GetPackageLatestVersion(cancellationToken, item.id, compilerVersion, platform);
+        if latestVersionInfo <> nil then
+        begin
+          metaData.LatestVersion := latestVersionInfo.LatestVersion;
+          metaData.LatestStableVersion := latestVersionInfo.LatestStableVersion;
+          Result.Results.Add(metaData);
+        end;
+      end;
+  end;
+
+
+end;
+
+//function TDirectoryPackageRepository.GetPackageLatestVersions(const cancellationToken: ICancellationToken; const ids: IList<IPackageId>; const platform: TDPMPlatform; const compilerVersion: TCompilerVersion): IDictionary<string, IPackageLatestVersionInfo>;
+//var
+//  i : integer;
+//  j : integer;
+//  id : string;
+//  searchFiles : IList<string>;
+//  regex : TRegEx;
+//  searchRegex : string;
+//  packageFile : string;
+//  match : TMatch;
+//  packageVersion : TPackageVersion;
+//  latestVersion  : TPackageVersion;
+//  latestStableVersion : TPackageVersion;
+//  info : IPackageLatestVersionInfo;
+//begin
+//  result := TCollections.CreateDictionary<string, IPackageLatestVersionInfo>;
+//
+//  searchRegEx := GetSearchRegex(compilerVersion, [], '');
+//  regex := TRegEx.Create(searchRegEx, [roIgnoreCase]);
+//
+//  for i := 0 to ids.Count -1 do
+//  begin
+//    id := ids.Items[i].Id;
+//    searchFiles := DoExactList(id, compilerVersion, platform, '');
+//    latestVersion := TPackageVersion.Empty;
+//    latestStableVersion := TPackageVersion.Empty;
+//    for j := 0 to searchFiles.Count -1 do
+//    begin
+//      packageFile := ChangeFileExt(ExtractFileName(searchFiles[j]), '');
+//      match := regex.Match(packageFile);
+//      if match.Success then
+//      begin
+//        if not TPackageVersion.TryParse(match.Groups[4].Value, packageVersion) then
+//          continue;
+//
+//        if packageVersion > latestVersion then
+//          latestVersion := packageVersion;
+//
+//        if packageVersion.IsStable and (packageVersion > latestStableVersion) then
+//          latestStableVersion := packageVersion;
+//      end;
+//      //if latestVersion is empt then we didn't find any files!
+//      if not latestVersion.IsEmpty then
+//      begin
+//        info := TDPMPackageLatestVersionInfo.Create(id,latestStableVersion, latestVersion);
+//        result[id] := info;
+//      end;
+//    end;
+//  end;
+//end;
+
+
+
+function TDirectoryPackageRepository.GetPackageMetaData(const cancellationToken : ICancellationToken; const packageId : string; const packageVersion : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform): IPackageSearchResultItem;
+var
+  packageFileName : string;
+  readSpecFunc : TReadSpecFunc;
+  metaData : IPackageMetadata;
+begin
+  result := nil;
+  packageFileName := Format('%s-%s-%s-%s.dpkg', [packageId, CompilerToString(compilerVersion), DPMPlatformToString(platform), packageVersion]);
+  packageFileName := IncludeTrailingPathDelimiter(SourceUri) + packageFileName;
+  if not FileExists(packageFileName) then
+    exit;
+  if cancellationToken.IsCancelled then
+    exit;
+
+  readSpecFunc := function (const name : string; const spec : IPackageSpec) : IInterface
+                  begin
+                    result := TPackageMetadata.CreateFromSpec(name, spec);
+                  end;
+
+  metaData := DoGetPackageMetaData(cancellationToken, packageFileName, readSpecFunc) as IPackageMetaData;
+  if metaData <> nil then
+    result := TDPMPackageSearchResultItem.FromMetaData(name, metaData);
+
+end;
+
+function TDirectoryPackageRepository.GetPackageVersions(const cancellationToken : ICancellationToken; const id : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const preRelease : boolean) : IList<TPackageVersion>;
 var
   searchFiles : IList<string>;
   regex : TRegEx;
@@ -412,17 +575,11 @@ begin
       if (not preRelease) and (not packageVersion.IsStable)  then
         continue;
 
-
       result.Add(packageVersion);
     end;
   end;
 
   //no point sorting here or making results distinct as the the repo manager will do both.
-
-//  result.Sort(function(const Left, Right: TPackageVersion): Integer
-//              begin
-//                   result := right.CompareTo(left);
-//              end);
 
 end;
 
@@ -436,6 +593,7 @@ var
   i : integer;
   packageVersion : TPackageVersion;
   packageInfo : IPackageInfo;
+  readSpecFunc : TReadSpecFunc;
 begin
   result := TCollections.CreateList<IPackageInfo>;
 
@@ -443,6 +601,13 @@ begin
 
   searchRegEx := GetSearchRegex(compilerVersion, [platform], '');
   regex := TRegEx.Create(searchRegEx, [roIgnoreCase]);
+
+
+  readSpecFunc := function (const name : string; const spec : IPackageSpec) : IInterface
+                  begin
+                    result := TPackageInfo.CreateFromSpec(name, spec);
+                  end;
+
   for i := 0 to searchFiles.Count - 1 do
   begin
     //ensure that the files returned are actually packages
@@ -454,14 +619,14 @@ begin
         continue;
 
       //todo : check this is correct.
-      if not versionRange.Satisfies(packageVersion) then
+      if not versionRange.IsSatisfiedBy(packageVersion) then
         continue;
 
       if not prerelease then
         if not packageVersion.IsStable then
           continue;
 
-      packageInfo := DoGetPackageInfo(cancellationToken, searchFiles[i]);
+      packageInfo := DoGetPackageMetadata(cancellationToken, searchFiles[i], readSpecFunc) as IPackageInfo;
       result.Add(packageInfo);
     end;
   end;
@@ -506,10 +671,9 @@ begin
     searchTerm := searchTerm + '-*' + cPackageFileExt;
 
   try
-    fileList := TDirectoryUtils.GetFiles(Source, searchTerm);
-    //    fileList := TCollections.CreateList<string>(files);
-        //dedupe
-    result.AddRange(TEnumerable.Distinct < string > (fileList, TStringComparer.OrdinalIgnoreCase));
+    fileList := TDirectoryUtils.GetFiles(SourceUri, searchTerm);
+    //dedupe
+    result.AddRange(fileList.Distinct(TStringComparer.OrdinalIgnoreCase));
   except
     on e : Exception do
     begin
@@ -519,53 +683,31 @@ begin
 end;
 
 
+
+
+function TDirectoryPackageRepository.DoGetPackageFeedFiles(const searchTerm : string; const exact : boolean; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) : IList<string>;
+var
+  files : IList<string>;
+  query : string;
+begin
+  Logger.Debug('TDirectoryPackageRepository.DoGetPackageFeedFiles');
+  result := TCollections.CreateList<string>;
+  query := searchTerm;
+  if (query <> '*') and (not exact) then
+    query := '*' + query + '*';
+  query := query + '-' + CompilerVersionToSearchPart(compilerVersion) + '-' + DPMPlatformToString(platform) + '-'  + '*' + cPackageFileExt;
+  files := TDirectoryUtils.GetFiles(SourceUri, query);
+  result.AddRange(files);
+
+end;
+
 type
   TPackageFind = record
     Id : string;
-    Platforms : TDPMPlatforms;
+    Platform : TDPMPlatform;
     LatestVersion : TPackageVersion;
+    LatestStableVersion : TPackageVersion;
   end;
-
-
-function TDirectoryPackageRepository.DoGetPackageFeedFiles(const options : TSearchOptions; searchTerm : string) : IList<string>;
-var
-  //  files : TStringDynArray;
-  platform : TDPMPlatform;
-  platformSearchTerm : string;
-begin
-  result := TCollections.CreateList < string > ;
-  if not options.Exact then
-  begin
-    if searchTerm <> '*' then
-      searchTerm := '*' + searchTerm + '*';
-  end;
-  searchTerm := searchTerm + '-' + CompilerVersionToSearchPart(options.CompilerVersion);
-  if options.Platforms = [] then
-  begin
-    if options.Version.IsEmpty then
-      searchTerm := searchTerm + '-*-*' + cPackageFileExt
-    else
-      searchTerm := searchTerm + '-*-' + options.Version.ToStringNoMeta + cPackageFileExt;
-
-    result := TDirectoryUtils.GetFiles(Source, searchTerm);
-    //result.AddRange(files);
-  end
-  else
-  begin
-    for platform in options.Platforms do
-    begin
-      platformSearchTerm := searchTerm + '-' + DPMPlatformToString(platform) + '-';
-      if options.Version.IsEmpty then
-        platformSearchTerm := platformSearchTerm + '*' + cPackageFileExt
-      else
-        platformSearchTerm := platformSearchTerm + options.Version.ToStringNoMeta + cPackageFileExt;
-
-      result := TDirectoryUtils.GetFiles(Source, platformSearchTerm);
-      //result.AddRange(files);
-    end;
-  end;
-
-end;
 
 
 function TDirectoryPackageRepository.DoGetPackageFeed(const cancelToken : ICancellationToken; const options : TSearchOptions; const files : IList<string>) : IList<IPackageSearchResultItem>;
@@ -583,17 +725,20 @@ var
   find : TPackageFind;
 
   packageMetaData : IPackageMetadata;
-
-  packagePlatformDependencies : IList<IPackagePlatformDependencies>;
-  platformDependencies : IPackagePlatformDependencies;
   resultItem : IPackageSearchResultItem;
+
+  readSpecFunc : TReadSpecFunc;
+
 begin
+  Logger.Debug('TDirectoryPackageRepository.DoGetPackageFeed');
   result := TCollections.CreateList<IPackageSearchResultItem>;
 
-  packageLookup := TCollections.CreateDictionary < string, TPackageFind > ;
+  packageLookup := TCollections.CreateDictionary<string, TPackageFind>  ;
 
   searchRegEx := GetSearchRegex(options.CompilerVersion, options.Platforms, '');
   regex := TRegEx.Create(searchRegEx, [roIgnoreCase]);
+
+
 
   //work out the latest version for each package and what platforms it supports.
   for i := 0 to files.Count - 1 do
@@ -621,30 +766,29 @@ begin
       if not packageLookup.TryGetValue(LowerCase(id), find) then
       begin
         find.Id := id;
-        find.Platforms := [platform];
+        find.Platform := platform;
         find.LatestVersion := packageVersion;
+        if packageVersion.IsStable then
+          find.LatestStableVersion := packageVersion;
         packageLookup[LowerCase(id)] := find;
       end
       else
       begin
-
-        if packageVersion = find.LatestVersion then
-        begin
-          //same version, just add to the platforms
-          find.Platforms := find.Platforms + [platform];
-        end
-        else if packageVersion > find.LatestVersion then
-        begin
-          //start again with a new latest version
+        if packageVersion > find.LatestVersion then
           find.LatestVersion := packageVersion;
-          find.Platforms := [platform];
-        end
-        else
-          continue; //lower version, ignore.
+
+        if packageVersion.IsStable then
+          if packageVersion > find.LatestStableVersion then
+            find.LatestStableVersion := packageVersion;
         packageLookup[LowerCase(id)] := find;
       end;
     end;
   end;
+
+  readSpecFunc := function (const name : string; const spec : IPackageSpec) : IInterface
+                  begin
+                    result := TPackageMetadata.CreateFromSpec(name, spec);
+                  end;
 
   //now we can use the info collected above to build actual results.
   for find in packageLookup.Values do
@@ -652,38 +796,29 @@ begin
     if cancelToken.IsCancelled then
       exit;
 
-    packagePlatformDependencies := TCollections.CreateList<IPackagePlatformDependencies>;
     resultItem := nil;
     packageMetaData := nil;
-    for platform in find.Platforms do
-    begin
-      if cancelToken.IsCancelled then
-        exit;
+    if cancelToken.IsCancelled then
+      exit;
 
-      packageFileName := Format('%s-%s-%s-%s.dpkg', [find.Id, CompilerToString(options.CompilerVersion), DPMPlatformToString(platform), find.LatestVersion.ToStringNoMeta]);
-      packageFileName := IncludeTrailingPathDelimiter(Source) + packageFileName;
-      if not FileExists(packageFileName) then
-        exit;
-      //Logger.Debug('Checking package file [' + packageFileName + ']');
+    packageFileName := Format('%s-%s-%s-%s.dpkg', [find.Id, CompilerToString(options.CompilerVersion), DPMPlatformToString(find.platform), find.LatestVersion.ToStringNoMeta]);
+    packageFileName := IncludeTrailingPathDelimiter(SourceUri) + packageFileName;
+    if not FileExists(packageFileName) then
+      exit;
 
-      packageMetadata := DoGetPackageMetaData(cancelToken, packageFileName);
-
-      if (packageMetadata <> nil) and packageMetadata.Dependencies.Any then
-      begin
-        platformDependencies := TDPMPackagePlatformDependencies.Create(platform, packageMetadata.Dependencies);
-        packagePlatformDependencies.Add(platformDependencies);
-      end;
-    end;
+    packageMetadata := DoGetPackageMetaData(cancelToken, packageFileName, readSpecFunc) as IPackageMetadata;
 
     if packageMetadata <> nil then
     begin
-      resultItem := TDPMPackageSearchResultItem.FromMetaData(Self.Name, packageMetadata, find.Platforms, packagePlatformDependencies);
+      resultItem := TDPMPackageSearchResultItem.FromMetaData(Self.Name, packageMetadata);
+      resultItem.LatestVersion := find.LatestVersion;
+      resultItem.LatestStableVersion := find.LatestStableVersion;
       result.Add(resultItem);
     end;
   end;
 end;
 
-function TDirectoryPackageRepository.DoGetPackageMetaData(const cancellationToken : ICancellationToken; const fileName : string) : IPackageMetadata;
+function TDirectoryPackageRepository.DoGetPackageMetaData(const cancellationToken : ICancellationToken; const fileName : string; const readSpecFunc : TReadSpecFunc) : IInterface;
 var
   zipFile : TZipFile;
   metaBytes : TBytes;
@@ -696,6 +831,7 @@ var
   iconBytes : TBytes;
   isSvg : boolean;
 begin
+  Logger.Debug('TDirectoryPackageRepository.DoGetPackageMetaData');
   result := nil;
   reader := TPackageSpecReader.Create(Logger);
 
@@ -759,7 +895,7 @@ begin
   spec := reader.ReadSpecString(metaString);
   if spec = nil then
     exit;
-  result := TPackageMetadata.CreateFromSpec(Name, spec);
+  result := readSpecFunc(name, spec);
   if not FPermissionsChecked then
   begin
     FIsWritable := TDirectoryUtils.IsDirectoryWriteable(ExtractFilePath(fileName));
@@ -800,7 +936,7 @@ begin
   else
     searchTerm := searchTerm + '-' + DPMPlatformToString(platform) + '-*' + cPackageFileExt;
 
-  result := TDirectoryUtils.GetFiles(Source, searchTerm);
+  result := TDirectoryUtils.GetFiles(SourceUri, searchTerm);
 
   //fileList := TCollections.CreateList<string>(files);
 
@@ -810,15 +946,13 @@ begin
   //result.AddRange(TEnumerable.Distinct<string>(fileList, TStringComparer.OrdinalIgnoreCase ));
 end;
 
-function TDirectoryPackageRepository.List(const cancellationToken : ICancellationToken; const options : TSearchOptions) : IList<IPackageIdentity>;
+function TDirectoryPackageRepository.List(const cancellationToken : ICancellationToken; const options : TSearchOptions) : IList<IPackageListItem>;
 var
   searchTerms : TArray<string>;
   searchFiles : IList<string>;
   allFiles : IList<string>;
-  distinctFiles : IEnumerable<string>;
   i : integer;
   platform : TDPMPlatform;
-  info : IPackageIdentity;
   searchRegEx : string;
   regex : TRegEx;
   packageFile : string;
@@ -827,8 +961,22 @@ var
   cv : TCompilerVersion;
   version : string;
   packageVersion : TPackageVersion;
+
+  currentCompiler : TCompilerVersion;
+  currentId : string;
+  currentVersion : TPackageVersion;
+  platforms : TDPMPlatforms;
+  newItem : IPackageListItem;
+  bIsLast : boolean;
+
+  procedure AddCurrent;
+  begin
+    newItem := TPackageListItem.Create(currentId,currentCompiler, currentVersion, DPMPlatformsToString(platforms));
+    result.Add(newItem);
+  end;
+
 begin
-  result := TCollections.CreateList<IPackageIdentity>;
+  result := TCollections.CreateList<IPackageListItem>;
   if options.SearchTerms <> '' then
     searchTerms := TStringUtils.SplitStr(Trim(options.SearchTerms), ' ');
   //need at least 1 search term, if there are none then search for *.
@@ -842,6 +990,9 @@ begin
 
   for i := 0 to Length(searchTerms) - 1 do
   begin
+    if cancellationToken.IsCancelled then
+      exit;
+
     if options.Platforms = [] then
     begin
       if options.Exact then
@@ -854,6 +1005,9 @@ begin
     begin
       for platform in options.Platforms do
       begin
+        if cancellationToken.IsCancelled then
+          exit;
+
         if options.Exact then
           searchFiles := DoExactList(searchTerms[i], options.CompilerVersion, platform, options.Version.ToStringNoMeta)
         else
@@ -863,24 +1017,24 @@ begin
     end;
   end;
 
-  //dedupe
-  distinctFiles := TDistinctIterator < string > .Create(allFiles, TStringComparer.OrdinalIgnoreCase);
-  if options.Skip > 0 then
-    distinctFiles := distinctFiles.Skip(options.Skip);
-  if options.Take > 0 then
-    distinctFiles := distinctFiles.Take(options.Take);
-  searchFiles.Clear;
-  searchFiles.AddRange(distinctFiles);
+  //remove the path from the files
+  for i := 0 to allFiles.Count -1 do
+    allFiles[i] := ChangeFileExt(ExtractFileName(allFiles[i]), '');
 
+  allFiles.Sort;
 
   //do we really need to do a regex check here?
   searchRegEx := GetSearchRegex(options.CompilerVersion, options.Platforms, options.Version.ToStringNoMeta);
   regex := TRegEx.Create(searchRegEx, [roIgnoreCase]);
-  for i := 0 to searchFiles.Count - 1 do
+  currentId := '';
+  currentVersion := TPackageVersion.Empty;
+  currentCompiler := TCompilerVersion.UnknownVersion;
+  platforms := [];
+  for i := 0 to allFiles.Count - 1 do
   begin
+    bIsLast := i = allFiles.Count -1;
     //ensure that the files returned are actually packages
-
-    packageFile := ChangeFileExt(ExtractFileName(searchFiles[i]), '');
+    packageFile := allFiles[i];
     match := regex.Match(packageFile);
     if match.Success then
     begin
@@ -888,17 +1042,95 @@ begin
       cv := StringToCompilerVersion(match.Groups[2].Value);
       platform := StringToDPMPlatform(match.Groups[3].Value);
       version := match.Groups[4].Value;
+
       if not TPackageVersion.TryParse(version, packageVersion) then
         continue;
+
       if not options.Prerelease then
         if not packageVersion.IsStable then
           continue;
-      //not using the trycreate here as we need a specific regex.
-      info := TPackageIdentity.Create(id, Name, packageVersion, cv, platform, '');
-      result.Add(info);
+      //if the id, compiler or version change then start a new listitem - same if it's the last entry in the list.
+      if (id <> currentId) or (cv <> currentCompiler) or (packageVersion <> currentVersion) or bIsLast then
+      begin
+        //higher version, start again
+        if (id = currentId) and (cv = currentCompiler) and (packageVersion <> currentVersion) then
+        begin
+          //lower version, just ignore it.
+          if packageVersion < currentVersion then
+          begin
+            if bIsLast then
+              AddCurrent;
+            continue;
+          end;
+
+          //higher version, start again.
+          currentId := id;
+          currentCompiler := cv;
+          currentVersion := packageVersion;
+          platforms := [platform];
+          if bIsLast then
+            AddCurrent;
+          continue;
+        end;
+        // a new package, so record the last one if we had one.
+        if (currentId <> '') and (currentCompiler <> TCompilerVersion.UnknownVersion) then
+        begin
+          if bIsLast then
+             Include(platforms, platform);
+          AddCurrent;
+        end;
+
+        currentId := id;
+        currentCompiler := cv;
+        currentVersion := packageVersion;
+        platforms := [platform];
+      end
+      else
+      begin
+        Include(platforms, platform);
+        if bIsLast then
+         AddCurrent;
+      end;
     end;
   end;
+end;
 
+function TDirectoryPackageRepository.Push(const cancellationToken : ICancellationToken; const pushOptions : TPushOptions): Boolean;
+var
+  targetFile : string;
+begin
+  result := false;
+  //  if TPath.IsRelativePath(pushOptions.PackagePath) then
+  pushOptions.PackagePath := TPath.GetFullPath(pushOptions.PackagePath);
+
+  if not FileExists(pushOptions.PackagePath) then
+  begin
+    Logger.Error('Package file [' + pushOptions.PackagePath + '] not found.');
+    exit;
+  end;
+
+  if not DirectoryExists(SourceUri) then
+  begin
+    Logger.Error('Source uri path does not exist [' + SourceUri + '].');
+    exit;
+  end;
+  try
+    targetFile := TPath.Combine(SourceUri, TPath.GetFileName(pushOptions.PackagePath));
+    if pushOptions.SkipDuplicate and TFile.Exists(targetFile) then
+    begin
+      Logger.Information('Package [' + TPath.GetFileName(pushOptions.PackagePath) + '] exists and skipDuplicates specified, skipping');
+      exit(true);
+    end;
+
+    TFile.Copy(pushOptions.PackagePath, targetFile, true);
+    Logger.Information('Package pushed ok.', true);
+    result := true;
+  except
+    on e : Exception do
+    begin
+      Logger.Error('Unable to copy file [' + pushOptions.PackagePath + '] to [' + SourceUri + '] : ' + e.Message);
+    end;
+  end;
 end;
 
 end.

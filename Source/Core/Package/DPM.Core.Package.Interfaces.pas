@@ -45,6 +45,7 @@ type
   //minimum info needed to identify package
   //need to make more of the api use this rather than the derived interfaces.
   //Note this only has info we can get from the package filename!
+  //represents the core package identity - id, version, compiler, platform
   IPackageId = interface
     ['{35FABD79-3880-4F46-9D70-AA19AAE44565}']
     function GetId : string;
@@ -59,15 +60,11 @@ type
     property Platform : TDPMPlatform read GetPlatform;
   end;
 
-  //represents the core package identity, ie id, version, compiler, platform
+  //packageid plus sourcename
   IPackageIdentity = interface(IPackageId)
     ['{E9E49A25-3ECA-4380-BB75-AC9E29725BEE}']
     function GetSourceName : string;
-    function GetProjectUrl : string;
     property SourceName : string read GetSourceName;
-    //note : we can't get the project url from the filename
-    //but we need it here for github based repos
-    property ProjectUrl : string read GetProjectUrl;
   end;
 
   IPackageDependency = interface
@@ -92,14 +89,6 @@ type
     property UseSource : boolean read GetUseSource write SetUseSource;
   end;
 
-  IPackageSearchPath = interface
-    ['{55B09D0C-01E4-4FF3-977F-98A1A57B62B1}']
-    function GetPath : string;
-
-    property Path : string read GetPath;
-  end;
-
-
   //full package metadata.
   IPackageMetadata = interface(IPackageInfo)
     ['{0C39A81D-63FF-4939-A74A-4BFE29724168}']
@@ -111,7 +100,12 @@ type
     function GetTags : string;
     function GetIsTrial : boolean;
     function GetIsCommercial : boolean;
-    function GetSearchPaths : IList<IPackageSearchPath>;
+    function GetProjectUrl : string;
+    function GetSearchPaths : IList<string>;
+    function GetRepositoryUrl : string;
+    function GetRepositoryType : string;
+    function GetRepositoryBranch : string;
+    function GetRepositoryCommit : string;
 
     property Description : string read GetDescription;
     property Authors : string read GetAuthors;
@@ -121,56 +115,29 @@ type
     property Tags : string read GetTags;
     property IsTrial : boolean read GetIsTrial;
     property IsCommercial : boolean read GetIsCommercial;
+    property ProjectUrl : string read GetProjectUrl;
+    property RepositoryUrl : string read GetRepositoryUrl;
+    property RepositoryType   : string read GetRepositoryType;
+    property RepositoryBranch : string read GetRepositoryBranch;
+    property RepositoryCommit : string read GetRepositoryCommit;
 
-    //TODO : We may be able t remove this as the only place it's use will probably be getting the full spec file.
-    property SearchPaths : IList<IPackageSearchPath>read GetSearchPaths;
+    property SearchPaths : IList<string>read GetSearchPaths;
   end;
 
-  //dependencies list for a single platform
-  IPackagePlatformDependencies = interface
-    ['{0C274B9B-ACD5-4355-8EDD-DA2E51247075}']
-    function GetPlatform : TDPMPlatform;
-    function GetDependencies : IList<IPackageDependency>;
-    property Dependencies : IList<IPackageDependency>read GetDependencies;
-  end;
-
-  //The available platforms and dependencies for a package version.
-  IPackageVersionResult = interface
-    ['{45329FED-210A-42E1-B2A2-243C7DB0A645}']
-    function GetVersion : string;
-    function GetPlatforms : TDPMPlatforms;
-    function GetDependencies : IList<IPackagePlatformDependencies>;
-
-    property Version : string read GetVersion;
-    property Platforms : TDPMPlatforms read GetPlatforms;
-    property Dependencies : IList<IPackagePlatformDependencies>read GetDependencies;
-  end;
-
-  IPackageVersionsResults = interface
-    ['{273329F2-3996-454F-9E93-BFB898C97F05}']
-    function GetId : string;
-    function GetResults : IList<IPackageVersionResult>;
-
-    property Id : string read GetId;
-    property Results : IList<IPackageVersionResult>read GetResults;
-  end;
-
-
-  //this is what is returned from a package feed for the UI.
-  //note for version we are using strings to improve performance
-  IPackageSearchResultItem = interface
+  //this is what is returned from a package repository for the UI.
+  IPackageSearchResultItem = interface(IPackageId)
     ['{8EB6EA16-3708-41F7-93A2-FE56EB75510B}']
     function GetSourceName : string;
-    function GetId : string;
-    function GetVersion : string;
-    function GetPlatforms : TDPMPlatforms;
-    function GetDependencies : IList<IPackagePlatformDependencies>;
+    function GetDependencies : IList<IPackageDependency>;
 
     function GetDescription : string;
     function GetAuthors : string;
-    function GetOwners : string;
     function GetProjectUrl : string;
     function GetReportUrl : string;
+    function GetRepositoryUrl : string;
+    function GetRepositoryType : string;
+    function GetRepositoryBranch : string;
+    function GetRepositoryCommit : string;
     function GetPublishedDate : string;
     function GetLicense : string;
     function GetIcon : string;
@@ -180,29 +147,44 @@ type
     function GetIsCommercial : boolean;
     function GetDownloadCount : Int64;
     function GetInstalled : boolean;
-    function GetInstalledVersion : string;
+    function GetLatestVersion : TPackageVersion;
+    function GetLatestStableVersion : TPackageVersion;
     function GetIsError : boolean;
     function GetIsReservedPrefix : boolean;
     function GetIsTransitive : boolean;
+    function GetIsLatestVersion : boolean;
+    function GetIsLatestStableVersion : boolean;
+    function GetVersionRange : TVersionRange;
 
+    procedure SetVersion(const value : TPackageVersion);
     procedure SetInstalled(const value : boolean);
-    procedure SetInstalledVersion(const value : string);
+    procedure SetLatestVersion(const value : TPackageVersion);
+    procedure SetLatestStableVersion(const value : TPackageVersion);
     procedure SetReportUrl(const value : string);
+    procedure SetRepositoryUrl(const value : string);
+    procedure SetRepositoryType(const value : string);
+    procedure SetRepositoryBranch(const value : string);
+    procedure SetRepositoryCommit(const value : string);
     procedure SetPublishedDate(const value : string);
     procedure SetIsTransitive(const value : boolean);
+    procedure SetVersionRange(const value : TVersionRange);
 
-    property Id : string read GetId;
-    property Version : string read GetVersion;
+    //reintroducing here to make it settable.
+    property Version : TPackageVersion read GetVersion write SetVersion;
+
     property Description : string read GetDescription;
     property Authors : string read GetAuthors;
-    property Owners : string read GetOwners;
     property ProjectUrl : string read GetProjectUrl;
+    property RepositoryUrl : string read GetRepositoryUrl;
+    property RepositoryType   : string read GetRepositoryType write SetRepositoryType;
+    property RepositoryBranch : string read GetRepositoryBranch write SetRepositoryBranch;
+    property RepositoryCommit : string read GetRepositoryCommit write SetRepositoryCommit;
     property License : string read GetLicense;
     property Icon : string read GetIcon;
     property Copyright : string read GetCopyright;
     property Tags : string read GetTags;
-    property Platforms : TDPMPlatforms read GetPlatforms;
-    property Dependencies : IList<IPackagePlatformDependencies>read GetDependencies;
+
+    property Dependencies : IList<IPackageDependency>read GetDependencies;
 
     //only returned from server feeds.
     property IsReservedPrefix : boolean read GetIsReservedPrefix;
@@ -213,9 +195,12 @@ type
 
     //these are for use by the UI, it's not returned.
     property Installed : boolean read GetInstalled write SetInstalled;
-    property InstalledVersion : string read GetInstalledVersion write SetInstalledVersion;
-    //    property InstalledPlatforms : TDPMPlatforms read GetInstalledPlatforms write SetInstalledPlatforms;
+    property LatestVersion : TPackageVersion read GetLatestVersion write SetLatestVersion;
+    property LatestStableVersion : TPackageVersion read GetLatestStableVersion write SetLatestStableVersion;
+    property IsLatestVersion : boolean read GetIsLatestVersion;
+    property IsLatestStableVersion : boolean read GetIsLatestStableVersion;
     property IsTransitive : boolean read GetIsTransitive write SetIsTransitive;
+    property VersionRange : TVersionRange read GetVersionRange write SetVersionRange;
     property ReportUrl : string read GetProjectUrl write SetReportUrl;
     property PublishedDate : string read GetPublishedDate write SetPublishedDate; //TODO : what format should this be - see repos
     property IsError : boolean read GetIsError;
@@ -223,33 +208,19 @@ type
     property SourceName : string read GetSourceName;
   end;
 
-  IPackageInstallerContext = interface;
+  IPackageSearchResult = interface
+  ['{547DDC6A-4A5F-429C-8A00-1B8FA4BA6D69}']
+    function GetTotalCount : Int64;
+    function GetSkip : Int64;
+    function GetResults : IList<IPackageSearchResultItem>;
 
-  //does the work of installing/restoring packages.
-  IPackageInstaller = interface
-    ['{554A0842-6C83-42BD-882C-B49FE4619DE0}']
-    function Install(const cancellationToken : ICancellationToken; const options : TInstallOptions) : boolean;
-    function UnInstall(const cancellationToken : ICancellationToken; const options : TUnInstallOptions) : boolean;
-    function Restore(const cancellationToken : ICancellationToken; const options : TRestoreOptions) : boolean;
-    function Cache(const cancellationToken : ICancellationToken; const options : TCacheOptions) : boolean;
-    function Remove(const cancellationToken : ICancellationToken; const options : TUninstallOptions) : boolean;
-    function Context : IPackageInstallerContext;
-  end;
+    procedure SetSkip(const value : Int64);
+    procedure SetTotalCount(const value : Int64);
 
-  //used to collect and detect package conflicts when working with multiple projects.
-  //will also be used to collect build instructions and
-  //design-time packages to install etc.
-  IPackageInstallerContext = interface
-    ['{8FD229A2-FE7B-4315-84B2-FF18B78C76DC}']
-    procedure Reset;
-    procedure StartProject(const projectFile : string);
-    procedure EndProject(const projectFile : string);
-    //
-    //register a bpl for install into the IDE.
-    procedure RegisterDesignPackage(const packageFile : string; const dependsOn : IList<string>);
 
-    function IsDesignPackageInstalled(const packageName : string) : boolean;
-
+    property Skip : Int64 read GetSkip write SetSkip;
+    property TotalCount : Int64 read GetTotalCount write SetTotalCount;
+    property Results : IList<IPackageSearchResultItem> read GetResults;
   end;
 
 
@@ -264,6 +235,37 @@ type
     property Stream : TStream read GetStream write SetStream;
   end;
 
+  IPackageListItem = interface
+  ['{649F91AF-95F9-47A2-99A3-30BF68844E6B}']
+    function GetId : string;
+    function GetVersion : TPackageVersion;
+    function GetPlatforms : string;
+    function GetCompilerVersion : TCompilerVersion;
+    procedure SetPlatforms(const value : string);
+    function IsSamePackageVersion(const item : IPackageListItem) : Boolean;
+    function IsSamePackageId(const item : IPackageListItem) : boolean;
+    function MergeWith(const item : IPackageListItem) : IPackageListItem;
+
+    property Id : string read GetId;
+    property CompilerVersion : TCompilerVersion read GetCompilerVersion;
+    property Version : TPackageVersion read GetVersion;
+    property Platforms : string read GetPlatforms write SetPlatforms;
+  end;
+
+  IPackageLatestVersionInfo = interface
+  ['{F157D248-248E-42C2-82E6-931423A5D1B0}']
+    function GetId : string;
+    function GetLatestStableVersion : TPackageVersion;
+    function GetLatestVersion : TPackageVersion;
+    procedure SetLatestStableVersion(const value : TPackageVersion);
+    procedure SetLatestVersion(const value : TPackageVersion);
+
+    property Id : string read GetId;
+    property LatestStableVersion : TPackageVersion read GetLatestStableVersion write SetLatestStableVersion;
+    property LatestVersion : TPackageVersion read GetLatestVersion write SetLatestVersion;
+  end;
+
+  //note : only compares Id
 
   TPackageInfoComparer = class(TInterfacedObject, IEqualityComparer<IPackageInfo>)
   protected
@@ -271,11 +273,20 @@ type
     function GetHashCode(const Value : IPackageInfo) : Integer; reintroduce;
   end;
 
+  //note : only compares Id
   TPackageSearchResultItemComparer = class(TInterfacedObject, IEqualityComparer<IPackageSearchResultItem>)
   protected
     function Equals(const Left, Right : IPackageSearchResultItem) : Boolean; reintroduce;
     function GetHashCode(const Value : IPackageSearchResultItem) : Integer; reintroduce;
   end;
+
+  TPackageListItemEqualityComparer = class(TInterfacedObject, IEqualityComparer<IPackageListItem>)
+  protected
+    function Equals(const Left, Right : IPackageListItem) : Boolean; reintroduce;
+    function GetHashCode(const Value : IPackageListItem) : Integer; reintroduce;
+  end;
+
+
 
 implementation
 
@@ -329,6 +340,29 @@ begin
   Result := BobJenkinsHash(PChar(s)^, SizeOf(Char) * Length(s), 0);
   {$IFEND}
 
+end;
+
+{ TPackageListItemComparer }
+
+
+{ TPackageListItemComparer }
+
+
+function TPackageListItemEqualityComparer.Equals(const Left, Right: IPackageListItem): Boolean;
+begin
+  result := (Left.Id = Right.Id) and (left.CompilerVersion = right.CompilerVersion) and (left.Version = right.Version);// and (left.Platforms = right.Platforms);
+end;
+
+function TPackageListItemEqualityComparer.GetHashCode(const Value: IPackageListItem): Integer;
+var
+  s : string;
+begin
+  s := Value.Id + CompilerToString(value.CompilerVersion) + Value.Version.ToStringNoMeta + Value.Platforms;
+  {$IF CompilerVersion >= 29.0}
+  Result := System.Hash.THashBobJenkins.GetHashValue(s);
+  {$ELSE}
+  Result := BobJenkinsHash(PChar(s)^, SizeOf(Char) * Length(s), 0);
+  {$IFEND}
 end;
 
 end.

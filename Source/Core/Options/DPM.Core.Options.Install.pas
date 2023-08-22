@@ -41,7 +41,9 @@ type
     FVersionString : string;
     FNoCache : boolean;
     FProjectPath : string;
+    FProjects : TArray<string>;
     FFloat : boolean;
+    FIsUpgrade : boolean;
     class var
       FDefault : TInstallOptions;
   protected
@@ -54,10 +56,11 @@ type
     constructor Create; override;
     function Validate(const logger : ILogger) : Boolean; override;
     function Clone : TInstallOptions; reintroduce;
-
+    property IsUpgrade : boolean read FIsUpgrade write FIsUpgrade;
     property PackageId : string read GetPackageId write SetPackageId;
     property PackageFile : string read FPackageFile write FPackageFile;
     property ProjectPath : string read FProjectPath write FProjectPath;
+    property Projects : TArray<string> read FProjects write FProjects;
     property VersionString : string read FVersionString write FVersionString;
   end;
 
@@ -73,7 +76,6 @@ uses
 function TInstallOptions.Clone : TInstallOptions;
 begin
   result := TInstallOptions.CreateClone(self);
-
 end;
 
 constructor TInstallOptions.Create;
@@ -91,6 +93,7 @@ begin
   FProjectPath := original.FProjectPath;
   FFloat := original.FFloat;
   Force := original.Force;
+  FIsUpgrade := original.IsUpgrade;
 end;
 
 class constructor TInstallOptions.CreateDefault;
@@ -107,6 +110,7 @@ procedure TInstallOptions.SetPackageId(const Value : string);
 begin
   SearchTerms := value;
 end;
+
 
 function TInstallOptions.Validate(const logger : ILogger) : Boolean;
 var
@@ -160,7 +164,7 @@ begin
     Self.Version := theVersion;
   end;
 
-  if FProjectPath = '' then
+  if (FProjectPath = '') and (Length(FProjects) = 0) then
   begin
     Logger.Error('Project path cannot be empty, must either be a directory or project file.');
     result := false;

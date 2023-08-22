@@ -34,7 +34,8 @@ uses
   DPM.Core.Types,
   DPM.Core.Dependency.Version,
   DPM.Core.Dependency.Interfaces,
-  DPM.Core.Package.Interfaces;
+  DPM.Core.Package.Interfaces,
+  DPM.Core.Package.Installer.Interfaces;
 
 //only intended for internal use by the resolver so interfaces can stay here
 type
@@ -43,7 +44,7 @@ type
     procedure RecordNoGood(const bad : IPackageInfo);
     function IsNoGood(const package : IPackageInfo) : boolean;
     procedure RecordResolution(const package : IPackageInfo; const versionRange : TVersionRange; const parentId : string);
-    function TryGetResolution(const packageId : string; out resolution : IResolution) : boolean;
+    function TryGetResolution(const packageId : string; const parentId : string; out resolution : IResolution) : boolean;
     procedure RemoveResolution(const packageId : string);
     procedure PushRequirement(const package : IPackageInfo);
     function PopRequirement : IPackageInfo;
@@ -53,7 +54,8 @@ type
     procedure AddPackageVersions(const packageId : string; const versions : IList<IPackageInfo>);
     procedure RemovePackageVersion(const packageId : string; const version : IPackageInfo);
     function GetResolvedPackages : IList<IPackageInfo>;
-    function BuildDependencyGraph : IGraphNode;
+    function BuildDependencyGraph : IPackageReference;
+    function ProjectFile : string;
   end;
 
   TResolverContext = class(TInterfacedObject, IResolverContext)
@@ -65,12 +67,14 @@ type
     FVersionCache : IDictionary<string, IList<IPackageInfo>>;
     FPlatform : TDPMPlatform;
     FCompilerVersion : TCompilerVersion;
+    FProjectFile : string;
+    FPackageInstallerContext : IPackageInstallerContext;
   protected
     procedure RecordNoGood(const bad : IPackageInfo);
     function IsNoGood(const package : IPackageInfo) : boolean;
 
     procedure RecordResolution(const package : IPackageInfo; const versionRange : TVersionRange; const parentId : string);
-    function TryGetResolution(const packageId : string; out resolution : IResolution) : boolean;
+    function TryGetResolution(const packageId : string; const parentId : string; out resolution : IResolution) : boolean;
     procedure RemoveResolution(const packageId : string);
     procedure PushRequirement(const package : IPackageInfo);
     function PopRequirement : IPackageInfo;
@@ -80,10 +84,11 @@ type
     procedure AddPackageVersions(const packageId : string; const versions : IList<IPackageInfo>);
     procedure RemovePackageVersion(const packageId : string; const version : IPackageInfo);
     function GetResolvedPackages : IList<IPackageInfo>;
-    function BuildDependencyGraph : IGraphNode;
+    function BuildDependencyGraph : IPackageReference;
+    function ProjectFile : string;
   public
-    constructor Create(const logger : ILogger; const newPackage : IPackageInfo; const projectReferences : IList<TProjectReference>);overload;
-    constructor Create(const logger : ILogger; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const projectReferences : IList<TProjectReference>);overload;
+    constructor Create(const logger : ILogger; const packageInstallerContext : IPackageInstallerContext; const projectFile : string; const newPackage : IPackageInfo; const projectReferences : IList<TProjectReference>);overload;
+    constructor Create(const logger : ILogger; const packageInstallerContext : IPackageInstallerContext; const projectFile : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const projectReferences : IList<TProjectReference>);overload;
   end;
 
 
@@ -114,49 +119,51 @@ begin
   result := FOpenRequirements.Any;
 end;
 
-function TResolverContext.BuildDependencyGraph : IGraphNode;
+function TResolverContext.BuildDependencyGraph : IPackageReference;
 var
-  toplevelPackages : IEnumerable<IResolution>;
+  toplevelPackages : TArray<IResolution>;
   topLevelPackage : IResolution;
 
-  procedure AddNode(const parentNode : IGraphNode; const package : IPackageInfo; const versionRange : TVersionRange);
+  procedure AddNode(const parent : IPackageReference; const package : IPackageInfo; const versionRange : TVersionRange);
   var
     resolution : IResolution;
     dependency : IPackageDependency;
-    childNode : IGraphNode;
+    dependencyReference : IPackageReference;
   begin
-    childNode := parentNode.AddChildNode(package.Id, package.Version, versionRange);
-    childNode.UseSource := package.UseSource;
+    dependencyReference := parent.AddPackageDependency(package.Id, package.Version, versionRange);
+    dependencyReference.UseSource := package.UseSource;
     for dependency in package.Dependencies do
     begin
-      if not TryGetResolution(dependency.Id, resolution) then
+      if not TryGetResolution(dependency.Id, parent.Id, resolution) then
         raise Exception.Create('Didn''t find a resolution for package [' + dependency.id + ']');
-      AddNode(childNode, resolution.Package, resolution.VersionRange);
+      AddNode(dependencyReference, resolution.Package, resolution.VersionRange);
     end;
   end;
 
 begin
-  result := TGraphNode.CreateRoot(FCompilerVersion, FPlatform);
+  result := TPackageReference.CreateRoot(FCompilerVersion, FPlatform);
   toplevelPackages := FResolved.Values.Where(function(const value : IResolution) : boolean
     begin
       result := value.ParentId = cRootNode;
-    end);
+    end).ToArray;
 
   for toplevelPackage in toplevelPackages do
     AddNode(result, topLevelPackage.Package, TVersionRange.Empty);
 end;
 
-constructor TResolverContext.Create(const logger: ILogger; const compilerVersion : TCompilerVersion; const platform: TDPMPlatform; const projectReferences: IList<TProjectReference>);
+constructor TResolverContext.Create(const logger: ILogger; const packageInstallerContext : IPackageInstallerContext; const projectFile : string; const compilerVersion : TCompilerVersion; const platform: TDPMPlatform; const projectReferences: IList<TProjectReference>);
 var
   projectReference : TProjectReference;
 begin
   FCompilerVersion := compilerVersion;
   FPlatform := platform;
   FLogger := logger;
-  FNoGoods := TCollections.CreateDictionary < string, IDictionary<TPackageVersion, byte> > ;
-  FResolved := TCollections.CreateDictionary < string, IResolution > ;
+  FPackageInstallerContext := packageInstallerContext;
+  FProjectFile := projectFile;
+  FNoGoods := TCollections.CreateDictionary<string, IDictionary<TPackageVersion, byte>>;
+  FResolved := TCollections.CreateDictionary<string, IResolution>;
   FOpenRequirements := TCollections.CreateQueue<IPackageInfo>;
-  FVersionCache := TCollections.CreateDictionary < string, IList<IPackageInfo> > ;
+  FVersionCache := TCollections.CreateDictionary<string, IList<IPackageInfo>>;
 
   for projectReference in projectReferences do
   begin
@@ -169,12 +176,12 @@ begin
 
 end;
 
-constructor TResolverContext.Create(const logger : ILogger; const newPackage : IPackageInfo; const projectReferences : IList<TProjectReference>);
+constructor TResolverContext.Create(const logger : ILogger;  const packageInstallerContext : IPackageInstallerContext; const projectFile : string; const newPackage : IPackageInfo; const projectReferences : IList<TProjectReference>);
 begin
   Assert(newPackage <> nil);
-  Create(logger, newPackage.CompilerVersion, newPackage.Platform, projectReferences);
+  Create(logger, packageInstallerContext, projectFile, newPackage.CompilerVersion, newPackage.Platform, projectReferences);
   PushRequirement(newPackage);
-  RecordResolution(newPackage, TVersionRange.Empty, cRootNode);
+  RecordResolution(newPackage, TVersionRange.Create(newPackage.Version), cRootNode);
 end;
 
 
@@ -223,6 +230,11 @@ begin
     result := nil;
 end;
 
+function TResolverContext.ProjectFile: string;
+begin
+  result := FProjectFile;
+end;
+
 procedure TResolverContext.RecordNoGood(const bad : IPackageInfo);
 var
   dict : IDictionary<TPackageVersion, byte>;
@@ -241,7 +253,7 @@ var
 begin
   if FResolved.ContainsKey(LowerCase(package.Id)) then
     raise Exception.Create('Resolution already exists for package [' + package.Id + ']');
-  resolution := TResolution.Create(package, versionRange, parentId);
+  resolution := TResolution.Create(package, versionRange, parentId, FProjectFile);
   FResolved.Add(LowerCase(package.Id), resolution);
 end;
 
@@ -261,9 +273,42 @@ begin
   end;
 end;
 
-function TResolverContext.TryGetResolution(const packageId : string; out resolution : IResolution) : boolean;
+function TResolverContext.TryGetResolution(const packageId : string; const parentId : string; out resolution : IResolution) : boolean;
+
+  procedure CopyDependencies(const parent : string; const res : IResolution);
+  var
+    i: Integer;
+    id : string;
+    childRes : IResolution;
+  begin
+    for i := 0 to res.package.Dependencies.Count -1 do
+    begin
+      id := res.package.Dependencies[i].Id;
+      childRes := FPackageInstallerContext.FindPackageResolution(FProjectFile,  FPlatform, id);
+      if childRes <> nil then
+      begin
+        FResolved[Lowercase(id)] := childRes;//.Clone(FProjectFile); //should we be cloning here?
+        if childRes.Package.Dependencies.Any then
+          CopyDependencies(parent,  childRes);
+      end;
+    end;
+  end;
+
 begin
   result := FResolved.TryGetValue(LowerCase(packageId), resolution);
+  if not result then
+  begin
+    //check if it was resolved in another project in the group
+    resolution := FPackageInstallerContext.FindPackageResolution(FProjectFile, FPlatform, packageId);
+    result := resolution <> nil;
+    if resolution <> nil then
+    begin
+      FResolved[Lowercase(packageId)] := resolution.Clone(parentId);
+      //if we resolved via another projectr in the group, then we need to bring along the resolved dependencies too
+      if resolution.Package.Dependencies.Any then
+        CopyDependencies(resolution.Package.Id, resolution);
+    end;
+  end;
 end;
 
 end.

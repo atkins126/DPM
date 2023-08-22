@@ -1,1 +1,82 @@
+//wizard splash
+DPMIDELOGO BITMAP "..\\images\\dpm.bmp"
+
+//packagelist default icon
 DPM_ICON_MISSING_SVG RCDATA "..\\images\\dpm-large.svg"
+
+// 10.4 and earlier project tree
+DPMLOGOBMP_16 BITMAP "..\\images\\dpm16.bmp"
+PLATFORM_WIN32 BITMAP "..\\images\\platform-win32.bmp"
+PLATFORM_MACOS BITMAP "..\\images\\platform_macos.bmp"
+PLATFORM_ANDRIOD BITMAP "..\\images\\platform_andriod.bmp"
+PLATFORM_IOS BITMAP "..\\images\\platform_ios.bmp"
+PLATFORM_LINUX BITMAP "..\\images\\platform_linux.bmp"
+
+//11.x and later project tree
+//we use the IDE's own images for platforms
+DPMLOGO RCDATA "..\\images\\dpm_24.png"
+DPMLOGO_16 RCDATA "..\\images\\dpm_16.png"
+DPMLOGO_24 RCDATA "..\\images\\dpm_24.png"
+DPMLOGO_32 RCDATA "..\\images\\dpm_32.png"
+DPMLOGO_48 RCDATA "..\\images\\dpm_48.png"
+
+
+ADD_PACKAGE_16 RCDATA "..\\images\\add_16px.png"
+ADD_PACKAGE_24 RCDATA "..\\images\\add_24px.png"
+ADD_PACKAGE_32 RCDATA "..\\images\\add_32px.png"
+ADD_PACKAGE_48 RCDATA "..\\images\\add_48px.png"
+
+REMOVE_PACKAGE_16 RCDATA "..\\images\\remove_16px.png"
+REMOVE_PACKAGE_24 RCDATA "..\\images\\remove_24px.png"
+REMOVE_PACKAGE_32 RCDATA "..\\images\\remove_32px.png"
+REMOVE_PACKAGE_48 RCDATA "..\\images\\remove_48px.png"
+
+UPGRADE_PACKAGE_16 RCDATA "..\\images\\upgrade_16px.png"
+UPGRADE_PACKAGE_24 RCDATA "..\\images\\upgrade_24px.png"
+UPGRADE_PACKAGE_32 RCDATA "..\\images\\upgrade_32px.png"
+UPGRADE_PACKAGE_48 RCDATA "..\\images\\upgrade_48px.png"
+
+DOWNGRADE_PACKAGE_16 RCDATA "..\\images\\downgrade_16px.png"
+DOWNGRADE_PACKAGE_24 RCDATA "..\\images\\downgrade_24px.png"
+DOWNGRADE_PACKAGE_32 RCDATA "..\\images\\downgrade_32px.png"
+DOWNGRADE_PACKAGE_48 RCDATA "..\\images\\downgrade_48px.png"
+
+SETTINGS_16 RCDATA "..\\images\\settings_16px.png"
+SETTINGS_24 RCDATA "..\\images\\settings_24px.png"
+SETTINGS_32 RCDATA "..\\images\\settings_32px.png"
+SETTINGS_48 RCDATA "..\\images\\settings_48px.png"
+
+REFRESH_16 RCDATA "..\\images\\refresh_16px.png"
+REFRESH_24 RCDATA "..\\images\\refresh_24px.png"
+REFRESH_32 RCDATA "..\\images\\refresh_32px.png"
+REFRESH_48 RCDATA "..\\images\\refresh_48px.png"
+
+INFO_16 RCDATA "..\\images\\info_16px.png"
+INFO_24 RCDATA "..\\images\\info_24px.png"
+INFO_32 RCDATA "..\\images\\info_32px.png"
+INFO_48 RCDATA "..\\images\\info_48px.png"
+
+CANCEL_16 RCDATA "..\\images\\cancel_16px.png"
+CANCEL_24 RCDATA "..\\images\\cancel_24px.png"
+CANCEL_32 RCDATA "..\\images\\cancel_32px.png"
+CANCEL_48 RCDATA "..\\images\\cancel_48px.png"
+
+CANCEL_HOT_16 RCDATA "..\\images\\cancel_hot_16px.png"
+CANCEL_HOT_24 RCDATA "..\\images\\cancel_hot_24px.png"
+CANCEL_HOT_32 RCDATA "..\\images\\cancel_hot_32px.png"
+CANCEL_HOT_48 RCDATA "..\\images\\cancel_hot_48px.png"
+
+MOVE_UP_16 RCDATA "..\\images\\move-up_16px.png"
+MOVE_UP_24 RCDATA "..\\images\\move-up_24px.png"
+MOVE_UP_32 RCDATA "..\\images\\move-up_32px.png"
+MOVE_UP_48 RCDATA "..\\images\\move-up_48px.png"
+
+MOVE_DOWN_16 RCDATA "..\\images\\move-down_16px.png"
+MOVE_DOWN_24 RCDATA "..\\images\\move-down_24px.png"
+MOVE_DOWN_32 RCDATA "..\\images\\move-down_32px.png"
+MOVE_DOWN_48 RCDATA "..\\images\\move-down_48px.png"
+
+OPEN_16 RCDATA "..\\images\\open_16px.png"
+OPEN_24 RCDATA "..\\images\\open_24px.png"
+OPEN_32 RCDATA "..\\images\\open_32px.png"
+OPEN_48 RCDATA "..\\images\\open_48px.png"

@@ -29,21 +29,22 @@ unit DPM.Console.Command.Push;
 interface
 
 uses
-  VSoft.Awaitable,
+  VSoft.CancellationToken,
   DPM.Console.ExitCodes,
   DPM.Console.Command.Base,
   DPM.Core.Configuration.Interfaces,
-  DPM.Core.Sources.Interfaces,
+//  DPM.Core.Sources.Interfaces,
+  DPM.Core.Repository.Interfaces,
   DPM.Core.Logging;
 
 type
   TPushCommand = class(TBaseCommand)
   private
-    FClientFactory : ISourceClientFactory;
+    FRepositoryManager : IPackageRepositoryManager;
   protected
     function Execute(const cancellationToken : ICancellationToken) : TExitCode; override;
   public
-    constructor Create(const logger : ILogger; const configurationManager : IConfigurationManager; const clientFactory : ISourceClientFactory);reintroduce;
+    constructor Create(const logger : ILogger; const configurationManager : IConfigurationManager; const repositoryManager : IPackageRepositoryManager);reintroduce;
   end;
 
 
@@ -57,10 +58,10 @@ uses
 
 { TPushCommand }
 
-constructor TPushCommand.Create(const logger : ILogger; const configurationManager : IConfigurationManager; const clientFactory : ISourceClientFactory);
+constructor TPushCommand.Create(const logger : ILogger; const configurationManager : IConfigurationManager; const repositoryManager : IPackageRepositoryManager);
 begin
   inherited Create(logger,configurationManager);
-  FClientFactory := clientFactory;
+  FRepositoryManager := repositoryManager;
 end;
 
 function TPushCommand.Execute(const cancellationToken : ICancellationToken) : TExitCode;
@@ -69,7 +70,6 @@ var
   sourceConfig : ISourceConfig;
   sourceUri : IUri;
   error : string;
-  client : ISourceClient;
 begin
   TPushOptions.Default.ApplyCommon(TCommonOptions.Default);
 
@@ -83,6 +83,7 @@ begin
   config := FConfigurationManager.LoadConfig(TPushOptions.Default.ConfigFile);
   if config = nil then
     exit(TExitCode.InitException);
+  FRepositoryManager.Initialize(config);
 
   //validate the source
   sourceConfig := config.Sources.Where(function(const item : ISourceConfig):boolean
@@ -102,14 +103,9 @@ begin
     exit(TExitCode.Error);
   end;
 
-  client := FClientFactory.CreateClient(sourceUri);
-  if client <> nil then
-  begin
-    if not client.Push(TPushOptions.Default) then
+  if not FRepositoryManager.Push(cancellationToken, TPushOptions.Default) then
       exit(TExitCode.Error);
-  end
-  else
-    exit(TExitCode.InitException);
+
 
   result := TExitCode.OK;
 end;
