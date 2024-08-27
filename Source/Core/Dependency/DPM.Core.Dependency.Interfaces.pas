@@ -45,10 +45,11 @@ type
   TNodeVisitProc = reference to procedure(const packageReference : IPackageReference);
 
   //a directed asyclic graph (DAG).
-  IPackageReference = interface(IPackageId)
+  IPackageReference = interface(IPackageIdentity)
     ['{20055C26-8E63-4936-8249-ACF8514A37E7}']
     function GetId : string;
     function GetParent : IPackageReference;
+    function GetParentId : string;
     procedure SetParent(const value : IPackageReference);
     function GetVersion : TPackageVersion;
     procedure SetVersion(const value : TPackageVersion);
@@ -69,39 +70,86 @@ type
     function GetPlatform : TDPMPlatform;
     function GetUseSource : boolean;
     function GetIsTransitive : boolean;
+    function GetIsTopLevel : boolean;
     function GetProjectFile : string;
 
-    function AddPackageDependency(const id : string; const version : TPackageVersion; const selectedOn : TVersionRange) : IPackageReference;
-    procedure AddExistingReference(const id : string; const packageReference : IPackageReference);
-    ///
-    /// Breadth first search
-    function FindFirstPackageReference(const id : string) : IPackageReference;
-    function FindPackageReferences(const id : string) : IList<IPackageReference>;
+    function GetPackageInfo : IPackageInfo;
+    procedure SetPackageInfo(const value : IPackageInfo);
 
-    /// <summary> Searches this reference only
+    //these will be added when we read the package manifest
+//    procedure AddDesignBPL(const platform : TDPMPlatform; const bplFile : string);
+//
+//    //returns true if we have already loaded the bpls
+//    function GetDesignBPLsLoaded(platform : TDPMPlatform) : boolean;
+//
+//    procedure SetDesignBPLsLoaded(platform : TDPMPlatform; const value : boolean);
+//
+//    function GetDesignBPLs(platform : TDPMPlatform) : IList<string>;
+
+    function AddChild(const id : string; const version : TPackageVersion; const selectedOn : TVersionRange) : IPackageReference;
+
+    procedure AddExistingChild(const id : string; const packageReference : IPackageReference);
+    /// <summary>
+    /// Finds the first reference to a package [id] using a breadth first search
+    ///  </summary>
+    function FindFirstChild(const id : string) : IPackageReference;
+
+    /// <summary>
+    /// Finds all references to a package [id] using a breadth first search
+    ///  </summary>
+    function FindChildren(const id : string) : IList<IPackageReference>;
+
+    /// <summary>
+    ///  Find a non transitive dependency
     /// </summary>
-    function FindDependency(const id : string) : IPackageReference;
-    function HasTopLevelDependency(const id : string) : boolean;
-    function HasAnyDependency(const id : string) : boolean;
+    function FindTopLevelChild(const id : string) : IPackageReference;
+
+    /// <summary>
+    /// Returns true if node has a top level dependency on [id]
+    /// </summary>
+    function HasTopLevelChild(const id : string) : boolean;
+
+    /// <summary>
+    /// Returns true if we have a dependency on [id] at any level in the graph
+    /// </summary>
+    function HasAnyChild(const id : string) : boolean;
+
+    /// <summary>
+    ///  Clones the node without any dependencies.
+    ///  </summary>
     function Clone : IPackageReference;
 
-    //removes any child with id recursively (and it's children)
-    function RemovePackageReference(const packageReference : IPackageReference) : boolean;
-    function RemoveTopLevelPackageReference(const id : string) : boolean;
+    /// <summary>
+    /// Removes any child with id recursively (and it's children)
+    /// </summary>
+    function RemoveChild(const packageReference : IPackageReference) : boolean;
+
+    /// <summary>
+    /// Removes a top level dependency, returns true if removed
+    /// </summary>
+    function RemoveTopLevelChild(const id : string) : boolean;
 
     function IsRoot : boolean;
-    function HasDependencies : boolean;
+    function HasChildren : boolean;
+
+    /// <summary>
+    /// Visits child nodes in depth first mode and calls the visitor proc with each node
+    /// </summary>
     procedure VisitDFS(const visitor : TNodeVisitProc);
 
     function ToIdVersionString : string;
 
-    //used by BOM check
+    /// <summary>
+    ///  Compares nodes including their children
+    ///  used by BOM check
+    /// </summary>
     function AreEqual(const otherPackageReference : IPackageReference; const depth : integer = 1) : boolean;
 
     property Id : string read GetId;
-    property SelectedOn : TVersionRange read GetSelectedOn write SetSelectedOn;
+    property VersionRange : TVersionRange read GetSelectedOn write SetSelectedOn;
     property IsTransitive : boolean read GetIsTransitive;
-    property Dependencies : IEnumerable<IPackageReference>read GetDependencies;
+    property IsTopLevel : boolean read GetIsTopLevel;
+    property Children : IEnumerable<IPackageReference>read GetDependencies;
     property Parent : IPackageReference read GetParent;
     property Platform : TDPMPlatform read GetPlatform;
     property UseSource : boolean read GetUseSource write SetUseSource;
@@ -111,10 +159,20 @@ type
     property SearchPaths : IList<string> read GetSearchPaths;
     property LibPath : string read GetLibPath write SetLibPath;
     property BplPath : string read GetBplPath write SetBplPath;
+
+    //resolution support
+    property PackageInfo : IPackageInfo read GetPackageInfo write SetPackageInfo;
+    property ParentId : string read GetParentId;
+
+    //design support
+//    property DesignBpls[platform : TDPMPlatform] : IList<string> read GetDesignBPLs;
+//
+//    property DesignBplsLoaded[platform : TDPMPlatform] : boolean read GetDesignBplsLoaded write SetDesignBplsLoaded;
+
   end;
 
 
-  IResolution = interface
+  IResolvedPackage = interface
     ['{CC4F63AA-80F7-46AC-8C42-0F8725B59579}']
     function GetPackage : IPackageInfo;
     function GetParentId : string;
@@ -123,27 +181,21 @@ type
     function GetProject : string;
     function GetIsTopLevel : boolean;
 
-    function Clone(const parentId : string) : IResolution;
+    function Clone(const parentId : string) : IResolvedPackage;
 
     property IsTopLevel : boolean read GetIsTopLevel;
-    property Package : IPackageInfo read GetPackage;
+    property PackageInfo : IPackageInfo read GetPackage;
     property VersionRange : TVersionRange read GetVersionRange write SetVersionRange;
     property ParentId : string read GetParentId;
-    property Project : string read GetProject;
-  end;
-
-  TProjectReference = record
-    Package : IPackageInfo;
-    VersionRange : TVersionRange;
-    ParentId : string;
+    property ProjectFile : string read GetProject;
   end;
 
   IDependencyResolver = interface
     ['{B187F0DB-FEA1-48B4-81F2-CECF073C2FB0}']
     function Initialize(const config : IConfiguration) : boolean;
     //returns true if all dependencies were resolved. If true, the graph is fully populated and can be serialized.
-    function ResolveForInstall(const cancellationToken : ICancellationToken; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const projectFile : string; const options : TSearchOptions; const newPackage : IPackageInfo; const projectReferences : IList<TProjectReference>; var dependencyGraph : IPackageReference; out resolved : IList<IPackageInfo>) : boolean;
-    function ResolveForRestore(const cancellationToken : ICancellationToken; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const projectFile : string; const options : TSearchOptions; const projectReferences : IList<TProjectReference>; var dependencyGraph : IPackageReference; out resolved : IList<IPackageInfo>) : boolean;
+    function ResolveForInstall(const cancellationToken : ICancellationToken; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const projectFile : string; const options : TSearchOptions; const newPackage : IPackageInfo; const projectReferences : IList<IPackageReference>; var dependencyGraph : IPackageReference; out resolved : IList<IPackageInfo>) : boolean;
+    function ResolveForRestore(const cancellationToken : ICancellationToken; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const projectFile : string; const options : TSearchOptions; const projectReferences : IList<IPackageReference>; var dependencyGraph : IPackageReference; out resolved : IList<IPackageInfo>) : boolean;
   end;
 
 

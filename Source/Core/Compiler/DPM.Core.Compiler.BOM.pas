@@ -48,7 +48,7 @@ uses
   System.SysUtils,
   Spring.Collections,
   DPM.Core.Types,
-  DPM.Core.Dependency.Graph,
+  DPM.Core.Dependency.Reference,
   DPM.Core.Dependency.Version;
 
 const
@@ -92,7 +92,7 @@ begin
           sId := depArray.Values[i].S['id'];
           sVersion := depArray.Values[i].S['version'];
           version := TPackageVersion.Parse(sVersion);
-          result.AddPackageDependency(sId,version, TVersionRange.Empty);
+          result.AddChild(sId,version, TVersionRange.Empty);
         end;
       end;
     finally
@@ -119,9 +119,9 @@ begin
       jsonObj.S['id'] := packageReference.Id;
       jsonObj.S['version'] := packageReference.Version.ToStringNoMeta;
       jsonObj.S['platform'] := DPMPlatformToString(packageReference.Platform);
-      if packageReference.HasDependencies then
+      if packageReference.HasChildren then
       begin
-        packageReference.Dependencies.ForEach(
+        packageReference.Children.ForEach(
           procedure(const dependency : IPackageReference)
           var
             depObj : TJsonObject;

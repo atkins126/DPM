@@ -105,7 +105,7 @@ uses
   DPM.Core.Constants,
   DPM.Core.Utils.Xml,
   DPM.Core.Dependency.Version,
-  DPM.Core.Dependency.Graph,
+  DPM.Core.Dependency.Reference,
 //  DPM.Core.Project.PackageReference,
   DPM.Core.Project.Configuration;
 
@@ -657,7 +657,7 @@ function TProjectEditor.LoadPackageRefences : boolean;
         else
           dupCheckReference := rootNode;
 
-        if dupCheckReference.FindDependency(id) <> nil then
+        if dupCheckReference.FindTopLevelChild(id) <> nil then
         begin
           if parentReference <> nil then
             raise Exception.Create('Duplicate package reference for package [' + id + '  ' + DPMPlatformToString(platform) + '] under [' + parentReference.Id + ']')
@@ -691,12 +691,12 @@ function TProjectEditor.LoadPackageRefences : boolean;
         end;
         if isTransitive then
         begin
-          newNode  := parentReference.AddPackageDependency(id, version, range);
+          newNode  := parentReference.AddChild(id, version, range);
           newNode.UseSource := useSource;
         end
         else
         begin
-          newNode := rootNode.AddPackageDependency(id, version, TVersionRange.Empty);
+          newNode := rootNode.AddChild(id, version, TVersionRange.Empty);
           newNode.UseSource := useSource;
         end;
         ReadPackageReferences(newNode, packageElement);
@@ -925,14 +925,14 @@ var
     packageReferenceElement.setAttribute('id', packageReference.Id);
     packageReferenceElement.setAttribute('platform', DPMPlatformToBDString(packageReference.Platform));
     packageReferenceElement.setAttribute('version', packageReference.Version.ToStringNoMeta);
-    if not packageReference.SelectedOn.IsEmpty then
-      packageReferenceElement.setAttribute('range', packageReference.SelectedOn.ToString);
+    if not packageReference.VersionRange.IsEmpty then
+      packageReferenceElement.setAttribute('range', packageReference.VersionRange.ToString);
     if packageReference.UseSource then
       packageReferenceElement.setAttribute('useSource', 'true');
     parentElement.appendChild(packageReferenceElement);
-    if packageReference.HasDependencies then
+    if packageReference.HasChildren then
     begin
-      for dependency in packageReference.Dependencies do
+      for dependency in packageReference.Children do
         WritePackageReference(packageReferenceElement, dependency);
     end;
   end;
@@ -954,12 +954,12 @@ begin
   else
   begin
     //remove existing nodes, we'll rewrite them below.
-    packageReferenceElements := dpmElement.selectNodes('x:PackageReference[@platform="' + DPMPlatformToString(platform) + '"]');
+    packageReferenceElements := dpmElement.selectNodes('x:PackageReference[@platform="' + DPMPlatformToBDString(platform) + '"]');
     for i := 0 to packageReferenceElements.length - 1 do
       dpmElement.removeChild(packageReferenceElements.item[i]);
   end;
 
-  for topLevelReference in dependencyGraph.Dependencies do
+  for topLevelReference in dependencyGraph.Children do
     WritePackageReference(dpmElement, topLevelReference);
 
 end;

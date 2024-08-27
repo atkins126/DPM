@@ -166,7 +166,7 @@ type
 
 
     function GetPackageReferences : IPackageReference;
-    function GetPackageIdsFromReferences(const platform: TDPMPlatform): IList<IPackageId>;
+    function GetPackageIdsFromReferences(const platform: TDPMPlatform): IList<IPackageIdentity>;
     procedure RequestPackageIcon(const index : integer; const package : IPackageSearchResultItem);
 
     function GetInstalledPackagesAsync: IAwaitable<IList<IPackageSearchResultItem>>;
@@ -185,7 +185,7 @@ type
     function GetPlatforms : TDPMPlatforms;
 
     //callbacks from the searchbar
-    procedure SearchBarSettingsChanged(const configuration : IConfiguration);
+    procedure SearchBarConfigChanged(const configuration : IConfiguration);
     procedure SearchBarPlatformChanged(const newPlatform : TDPMPlatform);
     procedure SearchBarOnSearch(const searchText : string; const searchOptions : TDPMSearchOptions; const source : string; const platform : TDPMPlatform; const refresh : boolean);
     procedure SearchBarOnFocustList(sender : TObject);
@@ -202,7 +202,6 @@ type
     function GetRowKind(const index : Int64) : TPackageRowKind;
     procedure CalculateIndexes;
     procedure ChangeScale(M: Integer; D: Integer{$IF CompilerVersion > 33}; isDpiChange: Boolean{$IFEND}); override;
-
     procedure LoadImages;
   public
     constructor Create(AOwner : TComponent); override;
@@ -228,6 +227,9 @@ uses
   System.Diagnostics,
   WinApi.ActiveX,
   Winapi.CommCtrl,
+  {$IF CompilerVersion > 34.0 }
+   BrandingAPI,
+  {$IFEND}
   DPM.Core.Constants,
   DPM.Core.Options.Common,
   DPM.Core.Utils.Config,
@@ -241,7 +243,7 @@ uses
   DPM.IDE.ToolsAPI,
   DPM.IDE.AboutForm,
   DPM.IDE.AddInOptionsHostForm,
-  DPM.Core.Dependency.Graph;
+  DPM.Core.Dependency.Reference;
 
 
 type
@@ -255,7 +257,7 @@ var
   dependencies : TArray<IPackageReference>;
 begin
   result := nil;
-  if (node = nil) or (not node.HasDependencies) then
+  if (node = nil) or (not node.HasChildren) then
     exit;
 
   //when we search the project node we need to actually look at it's children, otherwise we will not find dependencies.
@@ -264,7 +266,7 @@ begin
   begin
     //1st time through, these will be the project nodes
     //2nd time through, these will be top level dependencies.
-    dependencies := node.Dependencies.ToArray; //trying to make the debugger work here
+    dependencies := node.Children.ToArray; //trying to make the debugger work here
     for reference in dependencies do
     begin
       if SameText(reference.Id, searchId) then
@@ -283,7 +285,7 @@ begin
   if topLevelOnly then
     exit;
 
-  dependencies := node.Dependencies.ToArray;
+  dependencies := node.Children.ToArray;
   //breadth first search!
   for reference in dependencies do
   begin
@@ -296,12 +298,12 @@ begin
 
   //depth
 
-  for reference in node.Dependencies do
+  for reference in node.Children do
   begin
     if reference.Platform <> platform then
       continue;
     //depth search
-    if reference.HasDependencies then
+    if reference.HasChildren then
     begin
       result := FindPackageRef(reference, platform, searchId, false);
       if result <> nil then
@@ -483,9 +485,17 @@ begin
 
   //IOTAIDEThemingServices added in 10.2
   {$IFDEF THEMESERVICES}
+
   ideThemeSvc := (BorlandIDEServices as IOTAIDEThemingServices);
   ideThemeSvc.ApplyTheme(Self);
-  FIDEStyleServices := ideThemeSvc.StyleServices;
+  {$IF CompilerVersion > 34.0 }
+  if TIDEThemeMetrics.Font.Enabled then
+  begin
+    Font.Assign( TIDEThemeMetrics.Font.GetFont );
+    TIDEThemeMetrics.Font.AdjustDPISize( Font, TIDEThemeMetrics.Font.Size, CurrentPPI );
+  end;
+  {$IFEND}
+    FIDEStyleServices := ideThemeSvc.StyleServices;
   {$ELSE}
   FIDEStyleServices := Vcl.Themes.StyleServices;
   {$ENDIF}
@@ -525,7 +535,7 @@ begin
   //important to make it appear below the button bar
   FSearchBar.Top := 0;
   FSearchBar.OnSearch := Self.SearchBarOnSearch;
-  FSearchBar.OnConfigChanged := Self.SearchBarSettingsChanged;
+  FSearchBar.OnConfigChanged := Self.SearchBarConfigChanged;
   FSearchBar.OnPlatformChanged := Self.SearchBarPlatformChanged;
   FSearchBar.OnFocusList := Self.SearchBarOnFocustList;
   FSearchBar.ImageList := FImageList;
@@ -646,6 +656,14 @@ begin
     end;
 
     FCancelTokenSource.Reset;
+
+    FAvailablePackages.Clear;
+    if refreshInstalled then
+    begin
+      FAllInstalledPackages.Clear;
+      FInstalledPackages.Clear;
+      FImplicitPackages.Clear;
+    end;
 
     if (not refreshInstalled) and (FAllInstalledPackages <> nil) and (FAllInstalledPackages.Count > 0) then
     begin
@@ -782,15 +800,15 @@ begin
   end;
 end;
 
-function TDPMEditViewFrame.GetPackageIdsFromReferences(const platform: TDPMPlatform): IList<IPackageId>;
+function TDPMEditViewFrame.GetPackageIdsFromReferences(const platform: TDPMPlatform): IList<IPackageIdentity>;
 var
-  lookup : IDictionary<string, IPackageId>;
+  lookup : IDictionary<string, IPackageIdentity>;
   packageRef : IPackageReference;
 
   procedure AddPackageIds(const value : IPackageReference);
   var
     childRef : IPackageReference;
-    existing : IPackageId;
+    existing : IPackageIdentity;
   begin
     if not (value.Platform = platform) then
       exit;
@@ -807,16 +825,16 @@ var
         lookup[Lowercase(value.Id)] := value;
     end;
 
-    for childRef in value.Dependencies do
+    for childRef in value.Children do
       AddPackageIds(childRef);
   end;
 
 begin
-  lookup := TCollections.CreateDictionary < string, IPackageId > ;
-  result := TCollections.CreateList<IPackageId>;
+  lookup := TCollections.CreateDictionary<string, IPackageIdentity> ;
+  result := TCollections.CreateList<IPackageIdentity>;
   if FPackageReferences <> nil then
   begin
-    for packageRef in FPackageReferences.Dependencies do
+    for packageRef in FPackageReferences.Children do
     begin
       AddPackageIds(packageRef);
     end;
@@ -854,7 +872,7 @@ begin
 
     packageReference := projectEditor.GetPackageReferences(FCurrentPlatform);
     if packageReference <> nil then
-      Result.AddExistingReference(LowerCase(projectFile), packageReference);
+      Result.AddExistingChild(LowerCase(projectFile), packageReference);
   end;
 end;
 
@@ -1072,6 +1090,7 @@ var
   lProjectFile : string;
   repoManager : IPackageRepositoryManager;
   options : TSearchOptions;
+  searchResultItem : IPackageSearchResultItem;
 begin
   //local for capture
   lProjectFile := FProjectGroup.FileName;
@@ -1092,7 +1111,9 @@ begin
     var
       packageRef : IPackageReference;
       item : IPackageSearchResultItem;
-      packageIds : IList<IPackageId>;
+      packageIds : IList<IPackageIdentity>;
+      pkg : IPackageIdentity;
+    I: Integer;
     begin
       CoInitialize(nil);
       try
@@ -1116,7 +1137,7 @@ begin
               begin
                 item.IsTransitive := packageRef.IsTransitive;
                 if item.IsTransitive then
-                  item.VersionRange := packageRef.SelectedOn;
+                  item.VersionRange := packageRef.VersionRange;
               end
               else
               begin
@@ -1128,8 +1149,34 @@ begin
               item.Version := packageRef.Version;
               item.Installed := true;
             end;
+
+          end;
+          //remove from the list so we can tell if we got them all in the end.
+          pkg := packageIds.Where(
+              function(const value : IPackageIdentity) : boolean
+              begin
+                result := SameText(value.Id, item.Id);
+              end).FirstOrDefault;
+          if pkg <> nil then
+            packageIds.Remove(pkg);
+        end;
+
+        //if there are any left that means we didn't get the searchresultitem for it from the repos
+        if packageIds.Count > 0 then
+        begin
+          //we just fake them so there is something for the list?
+          for I := 0 to packageIds.Count -1 do
+          begin
+            pkg := packageIds[i];
+            //Can we get these from the packagecache?
+
+
+            //TODO : We should probably flag these in the list to show there is a problem!
+            searchResultItem := TDPMPackageSearchResultItem.FromError(pkg.Id, pkg.Version, options.CompilerVersion, FCurrentPlatform, 'Package not found on enabled sources' );
+            Result.Add(searchResultItem)
           end;
         end;
+
         result.Sort(function(const Left, Right : IPackageSearchResultItem) : Integer
           begin
             result := CompareStr(Left.Id, Right.Id);
@@ -1338,7 +1385,6 @@ end;
 procedure TDPMEditViewFrame.ScrollListPaintRow(const Sender: TObject;  const ACanvas: TCanvas; const itemRect: TRect; const index: Int64;  const state: TPaintRowState);
 var
   rowKind : TPackageRowKind;
-  item : IPackageSearchResultItem;
   title : string;
   version : string;
   latestVersion : string;
@@ -1415,29 +1461,6 @@ begin
     ACanvas.Brush.Color := backgroundColor;
   end;
 
-
-  icon := nil;
-
-  if rowKind in [rkInstalledPackage, rkImplicitPackage, rkAvailablePackage] then
-  begin
-    if (item <> nil) and (item.Icon <> '') then
-    begin
-      //first query will add nil to avoid multiple requests
-      if not FIconCache.Query(item.Id) then
-        //fetch the icon async
-        RequestPackageIcon(index, item)
-      else
-        //this might return nil if the request hasn't completed
-        //or it failed to find the icon.
-        icon := FIconCache.Request(item.Id);
-    end;
-
-    if icon = nil then
-      icon := FIconCache.Request('missing_icon');
-    if icon <> nil then
-      icon.PaintTo(ACanvas, FRowLayout.IconRect);
-  end;
-
   latestVersion := '';
   latestIsPrerelease := false;
   try
@@ -1474,60 +1497,66 @@ begin
       rkInstalledPackage:
       begin
         packageIdx := index - FInstalledHeaderRowIdx -1;
-        package := FInstalledPackages[packageIdx];
-        if package = nil then
-          exit;
-        title := package.Id;
-        version := ' ' + bulletChar + ' ' + package.Version.ToStringNoMeta;
-        if FSearchOptions.Prerelease then
+        if (packageIdx >= 0) and (packageIdx < FInstalledPackages.Count) then
         begin
-          if package.Version <> package.LatestVersion then
+          package := FInstalledPackages[packageIdx];
+          if package = nil then
+            exit;
+          title := package.Id;
+          version := ' ' + bulletChar + ' ' + package.Version.ToStringNoMeta;
+          if FSearchOptions.Prerelease then
           begin
-            latestVersion := package.LatestVersion.ToStringNoMeta;
-            latestIsPrerelease := not package.LatestVersion.IsStable;
-          end;
-        end
-        else
-        begin
-          if package.Version <> package.LatestStableVersion then
+            if package.Version <> package.LatestVersion then
+            begin
+              latestVersion := package.LatestVersion.ToStringNoMeta;
+              latestIsPrerelease := not package.LatestVersion.IsStable;
+            end;
+          end
+          else
           begin
-            // the installed version may be a pre-release version that
-            // is later than the latest stable version so check first!
-            if package.LatestStableVersion > package.Version then
-              latestVersion := package.LatestStableVersion.ToStringNoMeta;
+            if package.Version <> package.LatestStableVersion then
+            begin
+              // the installed version may be a pre-release version that
+              // is later than the latest stable version so check first!
+              if package.LatestStableVersion > package.Version then
+                latestVersion := package.LatestStableVersion.ToStringNoMeta;
+            end;
           end;
         end;
       end;
       rkImplicitPackage:
       begin
         packageIdx := index - FImplicitHeaderRowIdx -1;
-        package := FImplicitPackages[packageIdx];
-        if package = nil then
+        if (packageIdx >= 0) and (packageIdx < FImplicitPackages.Count) then
+        begin
+          package := FImplicitPackages[packageIdx];
+          if package = nil then
           exit;
 
-        title := package.Id;
-        version := ' ' + bulletChar + ' (' + package.Version.ToStringNoMeta + ')';
-        if FSearchOptions.Prerelease then
-        begin
-          if package.Version <> package.LatestVersion then
+          title := package.Id;
+          version := ' ' + bulletChar + ' (' + package.Version.ToStringNoMeta + ')';
+          if FSearchOptions.Prerelease then
           begin
-            latestVersion := package.LatestVersion.ToStringNoMeta;
-            latestIsPrerelease := not package.LatestVersion.IsStable;
-          end;
-        end
-        else
-        begin
-          if package.Version <> package.LatestStableVersion then
+            if package.Version <> package.LatestVersion then
+            begin
+              latestVersion := package.LatestVersion.ToStringNoMeta;
+              latestIsPrerelease := not package.LatestVersion.IsStable;
+            end;
+          end
+          else
           begin
-            latestVersion := package.LatestStableVersion.ToStringNoMeta;
-            latestIsPrerelease := false;
+            if package.Version <> package.LatestStableVersion then
+            begin
+              latestVersion := package.LatestStableVersion.ToStringNoMeta;
+              latestIsPrerelease := false;
+            end;
           end;
         end;
       end;
       rkAvailablePackage:
       begin
         packageIdx := index - FAvailableHeaderRowIdx -1;
-        if packageIdx >= 0 then
+        if (packageIdx >= 0) and (packageIdx < FAvailablePackages.Count) then
         begin
           package := FAvailablePackages[packageIdx];
           if package = nil then
@@ -1551,6 +1580,11 @@ begin
     end;
     title := title + version;
 
+    if (package <> nil) and  package.IsError then
+      ACanvas.Font.Color := $006464FA// $0F2CAB
+    else
+      ACanvas.Font.Color := FIDEStyleServices.GetSystemColor(clWindowText);
+
     DrawText(ACanvas.Handle, PChar(title),Length(title), FRowLayout.TitleRect, DT_SINGLELINE + DT_LEFT + DT_VCENTER );
     if latestVersion <> '' then
     begin
@@ -1561,6 +1595,29 @@ begin
         ACanvas.Font.Color := $E2A428;
       DrawText(ACanvas.Handle, PChar(latestVersion),Length(latestVersion), FRowLayout.LatestVersionRect, DT_SINGLELINE + DT_RIGHT + DT_VCENTER );
     end;
+
+    icon := nil;
+
+    if rowKind in [rkInstalledPackage, rkImplicitPackage, rkAvailablePackage] then
+    begin
+      if (package <> nil) and (package.Icon <> '') then
+      begin
+        //first query will add nil to avoid multiple requests
+        if not FIconCache.Query(package.Id) then
+          //fetch the icon async
+          RequestPackageIcon(index, package)
+        else
+          //this might return nil if the request hasn't completed
+          //or it failed to find the icon.
+          icon := FIconCache.Request(package.Id);
+      end;
+
+      if icon = nil then
+        icon := FIconCache.Request('missing_icon');
+      if icon <> nil then
+        icon.PaintTo(ACanvas, FRowLayout.IconRect);
+    end;
+
 
 
   finally
@@ -1608,9 +1665,11 @@ begin
 end;
 
 
-procedure TDPMEditViewFrame.SearchBarSettingsChanged(const configuration: IConfiguration);
+procedure TDPMEditViewFrame.SearchBarConfigChanged(const configuration: IConfiguration);
 begin
-
+  FCurrentPlatform := TDPMPlatform.UnknownPlatform; //force a reload
+  FConfiguration := configuration;
+  DoPlatformChange(FSearchBar.Platform, true, true);
 end;
 
 procedure TDPMEditViewFrame.ThemeChanged;

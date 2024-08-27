@@ -111,6 +111,9 @@ uses
   System.UITypes,
   Vcl.Themes,
   Vcl.Forms,
+  {$IF CompilerVersion > 34.0 }
+   BrandingAPI,
+  {$IFEND}
   Spring.Collections,
   VSoft.Uri,
   DPM.Core.Types,
@@ -123,7 +126,7 @@ procedure TPackageDetailsPanel.ChangeScale(M, D: Integer{$IF CompilerVersion > 3
 begin
   inherited;
   //for some reason this is not happening in D11.x
-  Canvas.Font.Height := MulDiv(Canvas.Font.Height, M, D );
+//  Canvas.Font.Height := MulDiv(Canvas.Font.Height, M, D );
   FLayout.ChangeScale(M, D{$IF CompilerVersion > 33}, isDpiChange{$IFEND} );
   UpdateLayout;
 end;
@@ -147,6 +150,13 @@ begin
   {$IFDEF STYLEELEMENTS}
   StyleElements := [seFont,seClient];
   {$ENDIF}
+  {$IF CompilerVersion > 34.0 }
+  if TIDEThemeMetrics.Font.Enabled then
+  begin
+    Font.Assign( TIDEThemeMetrics.Font.GetFont );
+    TIDEThemeMetrics.Font.AdjustDPISize( Font, TIDEThemeMetrics.Font.Size, CurrentPPI );
+  end;
+  {$IFEND}
   FLayout := TDetailsLayout.Create(0);
 end;
 
@@ -265,6 +275,10 @@ begin
   fontStyle := Canvas.Font.Style;
 
   Canvas.Font.Style := [fsBold];
+
+  if FPackage.IsError then
+    Canvas.Font.Color := $006464FA;
+
   DrawText(Canvas.Handle, 'Description', Length('Description'), FLayout.DescriptionLabelRect, DT_LEFT);
   Canvas.Font.Style := [];
   DrawText(Canvas.Handle, FPackage.Description, Length(FPackage.Description), FLayout.DescriptionRect, DT_LEFT + DT_WORDBREAK);
@@ -274,6 +288,12 @@ begin
 
   Canvas.Font.Style := [];
   DrawText(Canvas.Handle, FPackage.Version.ToStringNoMeta, Length(FPackage.Version.ToStringNoMeta), FLayout.VersionRect, DT_LEFT + DT_WORDBREAK);
+
+  if FPackage.IsError then
+  begin
+    Canvas.Font.Style := fontStyle;
+    exit;
+  end;
 
   Canvas.Font.Style := [fsBold];
   DrawText(Canvas.Handle, 'Authors :', Length('Authors :'), FLayout.AuthorsLabelRect, DT_LEFT);
@@ -357,7 +377,7 @@ begin
   Canvas.Font.Style := [];
 
   dependRect := FLayout.DependRect;
-  if FPackage.Dependencies.Any then
+  if (FPackage.Dependencies <> nil) and FPackage.Dependencies.Any then
   begin
     textSize := Canvas.TextExtent('Win32');
 
@@ -646,7 +666,7 @@ begin
   DependLabelRect.Width := textSize.cx;
   DependLabelRect.Height := textSize.cy;
 
-  if package.Dependencies.Any then
+  if (package.Dependencies <> nil) and package.Dependencies.Any then
   begin
     DependRect.Top := DependLabelRect.Bottom + LineSpacing;
     DependRect.Left := DependLabelRect.Left;

@@ -6,7 +6,7 @@
   #define MyAppVersion "0.1.10-alpha"
 #endif
 #define MyAppPublisher "The Delphi Package Manager Project"
-#define HelpURL "https://docs.delphipm.org"
+#define HelpURL "https://docs.delphi.dev"
 #define SupportURL "https://github.com/DelphiPackageManager/DPM/issues"
 #define UpdatesURL "https://github.com/DelphiPackageManager/DPM/releases"
 #ifndef OutputFileName
@@ -27,6 +27,7 @@ AppSupportURL={#SupportURL}
 AppUpdatesURL={#UpdatesURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
+AlwaysUsePersonalGroup=yes
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
 LicenseFile=..\LICENSE.txt
@@ -59,6 +60,7 @@ Name: Tokyo;   Description: Delphi 10.2 IDE Support; Types: full; check: IsDelph
 Name: Rio;     Description: Delphi 10.3 IDE Support; Types: full; check: IsDelphiInstalled('20.0');
 Name: Sydney;  Description: Delphi 10.4 IDE Support; Types: full; check: IsDelphiInstalled('21.0');
 Name: Alexandria;  Description: Delphi 11 IDE Support; Types: full; check: IsDelphiInstalled('22.0');
+Name: Athens;  Description: Delphi 12 IDE Support; Types: full; check: IsDelphiInstalled('23.0');
 
 
 [Tasks]
@@ -67,6 +69,7 @@ Name: AddToPath; Description: "Add dpm folder to PATH Environment variable"; Gro
 
 [Files]
 Source: "..\Output\dpm.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Output\DSpecCreator.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Output\DPM.IDE.XE2.dll"; DestDir: "{app}"; Flags: ignoreversion; Components : XE2
 Source: "..\Output\DPM.IDE.XE3.dll"; DestDir: "{app}"; Flags: ignoreversion; Components : XE3
 Source: "..\Output\DPM.IDE.XE4.dll"; DestDir: "{app}"; Flags: ignoreversion; Components : XE4
@@ -81,6 +84,7 @@ Source: "..\Output\DPM.IDE.D102.dll"; DestDir: "{app}"; Flags: ignoreversion; Co
 Source: "..\Output\DPM.IDE.D103.dll"; DestDir: "{app}"; Flags: ignoreversion; Components : Rio
 Source: "..\Output\DPM.IDE.D104.dll"; DestDir: "{app}"; Flags: ignoreversion; Components : Sydney
 Source: "..\Output\DPM.IDE.D110.dll"; DestDir: "{app}"; Flags: ignoreversion; Components : Alexandria
+Source: "..\Output\DPM.IDE.D120.dll"; DestDir: "{app}"; Flags: ignoreversion; Components : Athens
 
 [Registry]
 Root: HKCU; Subkey: "SOFTWARE\Embarcadero\BDS\9.0\Experts";  ValueType: string; ValueName: "DPM"; ValueData: "{app}\DPM.IDE.XE2.dll"; Components: XE2; Flags: uninsdeletevalue
@@ -97,6 +101,13 @@ Root: HKCU; Subkey: "SOFTWARE\Embarcadero\BDS\19.0\Experts"; ValueType: string; 
 Root: HKCU; Subkey: "SOFTWARE\Embarcadero\BDS\20.0\Experts"; ValueType: string; ValueName: "DPM"; ValueData: "{app}\DPM.IDE.D103.dll"; Components: Rio;     Flags: uninsdeletevalue
 Root: HKCU; Subkey: "SOFTWARE\Embarcadero\BDS\21.0\Experts"; ValueType: string; ValueName: "DPM"; ValueData: "{app}\DPM.IDE.D104.dll"; Components: Sydney;  Flags: uninsdeletevalue
 Root: HKCU; Subkey: "SOFTWARE\Embarcadero\BDS\22.0\Experts"; ValueType: string; ValueName: "DPM"; ValueData: "{app}\DPM.IDE.D110.dll"; Components: Alexandria;  Flags: uninsdeletevalue
+Root: HKCU; Subkey: "SOFTWARE\Embarcadero\BDS\23.0\Experts"; ValueType: string; ValueName: "DPM"; ValueData: "{app}\DPM.IDE.D120.dll"; Components: Athens;  Flags: uninsdeletevalue
+
+[Tasks]
+Name: startmenu; Description: Create &Start Menu Group;
+
+[Icons]
+Name: "{group}\DSpec Creator"; Filename: "{app}\DSpecCreator.exe"; WorkingDir: "{app}"; IconIndex: 0; Tasks: startmenu
 
 [Code]
 

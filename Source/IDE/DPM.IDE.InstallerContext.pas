@@ -10,36 +10,50 @@ uses
   DPM.Core.Dependency.Interfaces,
   DPM.Core.Package.Installer.Interfaces,
   DPM.Core.Package.InstallerContext,
-  DPM.Core.Spec.Interfaces,
-  DPM.IDE.DesignManager;
+  DPM.Core.Manifest.Interfaces,
+  DPM.IDE.PathManager;
 
 type
   TDPMIDEPackageInstallerContext = class(TCorePackageInstallerContext, IPackageInstallerContext)
   private
-    FDesignManager : IDPMIDEDesignManager;
+    FPathManager : IDPMIDEPathManager;
   protected
     procedure Clear;override;
     procedure RemoveProject(const projectFile : string);override;
-    function InstallDesignPackages(const cancellationToken: ICancellationToken; const projectFile : string; const packageSpecs: IDictionary<string, IPackageSpec>) : boolean;override;
+    function InstallDesignPackages(const cancellationToken: ICancellationToken; const projectFile : string; const platform: TDPMPlatform; const packageManifests: IDictionary<string, IPackageManifest>) : boolean;override;
   public
-    constructor Create(const logger : ILogger; const designManager : IDPMIDEDesignManager);reintroduce;
+    constructor Create(const logger : ILogger; const pathManager : IDPMIDEPathManager);reintroduce;
   end;
 
 implementation
 
+uses
+  System.SysUtils;
+
 { TDPMIDEPackageInstallerContext }
 
-constructor TDPMIDEPackageInstallerContext.Create(const logger: ILogger; const designManager : IDPMIDEDesignManager);
+constructor TDPMIDEPackageInstallerContext.Create(const logger: ILogger; const pathManager : IDPMIDEPathManager);
 begin
   inherited Create(logger);
-  FDesignManager := designManager;
+  FPathManager := pathManager;
 
 end;
 
 
-function TDPMIDEPackageInstallerContext.InstallDesignPackages(const cancellationToken: ICancellationToken; const projectFile : string; const packageSpecs: IDictionary<string, IPackageSpec>): boolean;
+function TDPMIDEPackageInstallerContext.InstallDesignPackages(const cancellationToken: ICancellationToken; const projectFile : string; const platform: TDPMPlatform; const packageManifests: IDictionary<string, IPackageManifest>): boolean;
+var
+  projectGraph : IPackageReference;
 begin
   result := true;
+  projectGraph := GetProjectGraph(projectFile, platform);
+  if projectGraph = nil then
+  begin
+    Logger.Error(Format('No projectGraph recorded for : %s platform : %s',[projectFile,DPMPlatformToString(platform)]));
+
+
+  end;
+
+
 
 end;
 

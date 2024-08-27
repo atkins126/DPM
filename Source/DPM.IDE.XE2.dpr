@@ -57,7 +57,7 @@ uses
   DPM.Core.Configuration.Interfaces in 'Core\Configuration\DPM.Core.Configuration.Interfaces.pas',
   DPM.Core.Configuration.Manager in 'Core\Configuration\DPM.Core.Configuration.Manager.pas',
   DPM.Core.Dependency.Context in 'Core\Dependency\DPM.Core.Dependency.Context.pas',
-  DPM.Core.Dependency.Graph in 'Core\Dependency\DPM.Core.Dependency.Graph.pas',
+  DPM.Core.Dependency.Reference in 'Core\Dependency\DPM.Core.Dependency.Reference.pas',
   DPM.Core.Dependency.Interfaces in 'Core\Dependency\DPM.Core.Dependency.Interfaces.pas',
   DPM.Core.Dependency.Resolution in 'Core\Dependency\DPM.Core.Dependency.Resolution.pas',
   DPM.Core.Dependency.Resolver in 'Core\Dependency\DPM.Core.Dependency.Resolver.pas',
@@ -80,7 +80,7 @@ uses
   DPM.Core.Package.Installer in 'Core\Package\DPM.Core.Package.Installer.pas',
   DPM.Core.Package.InstallerContext in 'Core\Package\DPM.Core.Package.InstallerContext.pas',
   DPM.Core.Package.Interfaces in 'Core\Package\DPM.Core.Package.Interfaces.pas',
-  DPM.Core.Package.Metadata in 'Core\Package\DPM.Core.Package.Metadata.pas',
+  DPM.Core.Package.Classes in 'Core\Package\DPM.Core.Package.Classes.pas',
   DPM.Core.Package.SearchResults in 'Core\Package\DPM.Core.Package.SearchResults.pas',
   DPM.Core.Packaging.Archive in 'Core\Packaging\DPM.Core.Packaging.Archive.pas',
   DPM.Core.Packaging.Archive.Reader in 'Core\Packaging\DPM.Core.Packaging.Archive.Reader.pas',
@@ -176,9 +176,12 @@ uses
   DPM.IDE.ProjectNotifier in 'IDE\DPM.IDE.ProjectNotifier.pas',
   DPM.IDE.ActivityIndicator in 'IDE\EditorView\DPM.IDE.ActivityIndicator.pas',
   DPM.Core.Package.PackageLatestVersionInfo in 'Core\Package\DPM.Core.Package.PackageLatestVersionInfo.pas',
-  DPM.IDE.DesignManager in 'IDE\DPM.IDE.DesignManager.pas',
+  DPM.IDE.PathManager in 'IDE\DPM.IDE.PathManager.pas',
   System.Actions in 'IDE\Compatibility\System.Actions.pas',
-  System.ImageList in 'IDE\Compatibility\System.ImageList.pas';
+  System.ImageList in 'IDE\Compatibility\System.ImageList.pas',
+  DPM.Core.Manifest.Interfaces in 'Core\Manifest\DPM.Core.Manifest.Interfaces.pas',
+  DPM.Core.Manifest in 'Core\Manifest\DPM.Core.Manifest.pas',
+  DPM.Core.Manifest.Reader in 'Core\Manifest\DPM.Core.Manifest.Reader.pas';
 
 {$R *.res}
 

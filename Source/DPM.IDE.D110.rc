@@ -15,10 +15,10 @@ BEGIN
     BEGIN
          BLOCK "0C0904E4"
          BEGIN
-              VALUE "LegalCopyright", "© 2019 -2021 Vincent Parrett and Contributors\0"
-              VALUE "ProductName", "DPM Package Manager\0"
+              VALUE "LegalCopyright", "© 2019 -2024 Vincent Parrett and Contributors\0"
+              VALUE "ProductName", "DPM IDE Support for Delphi11\0"
               VALUE "ProductVersion", "0.2.0-alpha\0"
-              VALUE "CompileDate", "Sunday, 20 August 2023 11:57 AM\0"
+              VALUE "CompileDate", "Friday, 7 June 2024 11:43 AM\0"
               VALUE "FileVersion", "0.2.0.0\0"
          END
     END

@@ -51,6 +51,7 @@ type
     FRepositoryCommit : string;
     FReleaseNotes : string;
     FLicense : string;
+    FLicenseType : TDPMLicenseType;
     FIcon : string;
     FCopyright : string;
     FTags : string;
@@ -70,6 +71,7 @@ type
     function GetRepositoryCommit : string;
     function GetReleaseNotes : string;
     function GetLicense : string;
+    function GetLicenseType : TDPMLicenseType;
     function GetIcon : string;
     function GetCopyright : string;
     function GetTags : string;
@@ -89,6 +91,7 @@ type
     procedure SetRepositoryCommit(const value : string);
     procedure SetReleaseNotes(const value : string);
     procedure SetLicense(const value : string);
+    procedure SetLicenseType(const value : TDPMLicenseType);
     procedure SetIcon(const value : string);
     procedure SetCopyright(const value : string);
     procedure SetTags(const value : string);
@@ -99,6 +102,7 @@ type
     procedure SetUIFrameworkType(const value: TDPMUIFrameworkType);
 
     function LoadFromJson(const jsonObject : TJsonObject) : Boolean; override;
+    function ToJSON : string; override;
 
   public
     constructor Create(const logger : ILogger); override;
@@ -118,6 +122,7 @@ begin
   inherited Create(logger);
   FVersion := TPackageVersion.Empty;
   FUIFrameworkType := TDPMUIFrameworkType.None;
+  FLicenseType := TDPMLicenseType.SPDX;
 end;
 
 function TSpecMetaData.GetAuthors : string;
@@ -160,6 +165,11 @@ end;
 function TSpecMetaData.GetLicense : string;
 begin
   result := FLicense;
+end;
+
+function TSpecMetaData.GetLicenseType: TDPMLicenseType;
+begin
+  result := FLicenseType;
 end;
 
 function TSpecMetaData.GetProjectUrl : string;
@@ -218,6 +228,7 @@ var
   sVersion : string;
   sError : string;
   sUI : string;
+  sLicenseType : string;
 begin
   result := true;
   FId := jsonObject.S['id'];
@@ -271,7 +282,9 @@ begin
   sUI := jsonObject.S['uiFramework'];
   if sUI <> '' then
     FUIFrameworkType := StringToUIFrameworkType(sUI);
-
+  sLicenseType := jsonObject.S['licenseType'];
+  if sLicenseType <> '' then
+    FLicenseType := StringToLicenseType(sLicenseType);
 end;
 
 
@@ -313,6 +326,11 @@ end;
 procedure TSpecMetaData.SetLicense(const value : string);
 begin
   FLicense := value;
+end;
+
+procedure TSpecMetaData.SetLicenseType(const value: TDPMLicenseType);
+begin
+  FLicenseType := value;
 end;
 
 procedure TSpecMetaData.SetProjectUrl(const value : string);
@@ -363,6 +381,34 @@ end;
 procedure TSpecMetaData.SetVersion(const value : TPackageVersion);
 begin
   FVersion := value;
+end;
+
+function TSpecMetaData.ToJSON: string;
+var
+  json : TJSONObject;
+begin
+  json := TJSONObject.Create;
+  try
+    json.S['id'] := FId;
+    json.S['version'] := FVersion.ToString;
+    json.S['description'] := FDescription;
+    if Length(FIcon) > 0 then
+      json.S['icon'] := FIcon;
+    json.S['authors'] := FAuthors;
+    json.S['projectUrl'] := FProjectUrl;
+    json.S['repositoryUrl'] := FRepositoryUrl;
+    json.S['license'] := FLicense;
+    json.S['copyright'] := FCopyright;
+    json.S['tags'] := FTags;
+    if FIsTrial then
+      json.B['istrial'] := FIsTrial;
+    if FIsCommercial then
+      json.b['iscommercial'] := FIsCommercial;
+
+    Result := json.ToJSON;
+  finally
+    FreeAndNil(json);
+  end;
 end;
 
 end.

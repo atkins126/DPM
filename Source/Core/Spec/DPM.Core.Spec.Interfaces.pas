@@ -44,17 +44,20 @@ type
   ISpecNode = interface
     ['{AD47A3ED-591B-4E47-94F2-7EC136182202}']
     function LoadFromJson(const jsonObject : TJsonObject) : boolean;
+    function LoadObjectList(list: IList<ISpecNode>): TJsonArray;
+    function ToJSON: string;
   end;
 
   ISpecDependency = interface(ISpecNode)
     ['{6CE14888-54A8-459C-865E-E4B4628DB8C6}']
     function GetId : string;
+    procedure SetId(Id: string);
     function GetVersionRange : TVersionRange;
     procedure SetVersionRange(const value : TVersionRange);
     function GetVersionString : string;
     function IsGroup : boolean;
     function Clone : ISpecDependency;
-    property Id : string read GetId;
+    property Id : string read GetId write SetId;
     property Version : TVersionRange read GetVersionRange write SetVersionRange;
     property VersionString : string read GetVersionString;
   end;
@@ -82,6 +85,7 @@ type
     function GetRepositoryCommit : string;
     function GetReleaseNotes : string;
     function GetLicense : string;
+    function GetLicenseType : TDPMLicenseType;
     function GetIcon : string;
     function GetCopyright : string;
     function GetTags : string;
@@ -89,6 +93,7 @@ type
     function GetIsCommercial : boolean;
     function GetReadMe : string;
     function GetUIFrameworkType : TDPMUIFrameworkType;
+
 
     procedure SetVersion(const value : TPackageVersion);
     procedure SetId(const value : string);
@@ -101,6 +106,7 @@ type
     procedure SetRepositoryCommit(const value : string);
     procedure SetReleaseNotes(const value : string);
     procedure SetLicense(const value : string);
+    procedure SetLicenseType(const value : TDPMLicenseType);
     procedure SetIcon(const value : string);
     procedure SetCopyright(const value : string);
     procedure SetTags(const value : string);
@@ -121,6 +127,7 @@ type
     property RepositoryCommit : string read GetRepositoryCommit write SetRepositoryCommit;
     property ReleaseNotes     : string read GetReleaseNotes write SetReleaseNotes;
     property License : string read GetLicense write SetLicense;
+    property LicenseType : TDPMLicenseType read GetLicenseType write SetLicenseType;
     property Icon : string read GetIcon write SetIcon;
     property Copyright : string read GetCopyright write SetCopyright;
     property Tags : string read GetTags write SetTags;
@@ -137,6 +144,7 @@ type
     function GetDestination : string;
     function GetExclude : IList<string>;
     function GetFlatten : boolean;
+    procedure SetFlatten(value: Boolean);
     procedure SetSource(const value : string);
     procedure SetDestination(const value : string);
     function GetIgnore : boolean;
@@ -146,7 +154,7 @@ type
     property Source : string read GetSource write SetSource;
     property Destination : string read GetDestination write SetDestination;
     property Exclude : IList<string>read GetExclude;
-    property Flatten : boolean read GetFlatten;
+    property Flatten : boolean read GetFlatten write SetFlatten;
     property Ignore : boolean read GetIgnore;
   end;
 
@@ -160,10 +168,13 @@ type
 
     procedure SetSource(const value : string);
     procedure SetBuildId(const value : string);
+    procedure SetCopyLocal(const value : Boolean);
+    procedure SetInstall(const value : Boolean);
+
     function Clone : ISpecBPLEntry;
     property Source : string read GetSource write SetSource;
-    property CopyLocal : boolean read GetCopyLocal; //ignored for design
-    property Install : boolean read GetInstall; //ignored for runtime
+    property CopyLocal : boolean read GetCopyLocal write SetCopyLocal; //ignored for design
+    property Install : boolean read GetInstall write SetInstall; //ignored for runtime
     property BuildId : string read GetBuildId write SetBuildId;
   end;
 
@@ -214,6 +225,7 @@ type
 
     procedure SetId(const value : string);
     procedure SetProject(const value : string);
+    procedure SetConfig(const value: string);
     procedure SetBplOutputDir(const value : string);
     procedure SetLibOutputDir(const value : string);
     procedure SetDesignOnly(const value : boolean);
@@ -222,7 +234,7 @@ type
     function Clone : ISpecBuildEntry;
     property Id : string read GetId write SetId;
     property Project : string read GetProject write SetProject;
-    property Config : string read GetConfig;
+    property Config : string read GetConfig write SetConfig;
     property LibOutputDir : string read GetLibOutputDir write SetLibOutputDir;
     property BplOutputDir : string read GetBplOutputDir write SetBplOutputDir;
 
@@ -243,6 +255,24 @@ type
     function GetSearchPaths : IList<ISpecSearchPath>;
     function GetBuildEntries : IList<ISpecBuildEntry>;
 
+    function NewSource(const src: string): ISpecFileEntry;
+    function NewLib(const src: string): ISpecFileEntry;
+    function NewFiles(const src: string): ISpecFileEntry;
+    function NewSearchPath(const path : string) : ISpecSearchPath;
+    function NewRuntimeBplBySrc(const src : string) : ISpecBPLEntry;
+    function NewDesignBplBySrc(const src : string) : ISpecBPLEntry;
+    function NewBuildEntryById(const id : string) : ISpecBuildEntry;
+    function NewDependencyById(const id : string) : ISpecDependency;
+
+    procedure DeleteSource(const src: string);
+    procedure DeleteLib(const src: string);
+    procedure DeleteFiles(const src: string);
+    procedure DeleteSearchPath(const path : string);
+    procedure DeleteRuntimeBplBySrc(const src : string);
+    procedure DeleteDesignBplBySrc(const src : string);
+    procedure DeleteBuildEntryById(const src : string);
+    procedure DeleteDependencyById(const id : string);
+
     function FindDependencyById(const id : string) : ISpecDependency;
     function FindDependencyGroupByTargetPlatform(const targetPlatform : TTargetPlatform) : ISpecDependencyGroup;
     function FindSearchPathByPath(const path : string) : ISpecSearchPath;
@@ -253,12 +283,11 @@ type
     function FindOtherFileBySrc(const src : string) : ISpecFileEntry;
     function FindBuildEntryById(const id : string) : ISpecBuildEntry;
 
-
     property LibFiles : IList<ISpecFileEntry>read GetLibFiles;
     property SourceFiles : IList<ISpecFileEntry>read GetSourceFiles;
     property Files : IList<ISpecFileEntry>read GetFiles;
     property RuntimeFiles : IList<ISpecBPLEntry>read GetRuntimeFiles;
-    property DesignFiles : IList<ISpecBPLEntry>read GetDesignFiles;
+    property DesignFiles : IList<ISpecBPLEntry> read GetDesignFiles;
     property Dependencies : IList<ISpecDependency>read GetDependencies;
     property SearchPaths : IList<ISpecSearchPath>read GetSearchPaths;
     property BuildEntries : IList<ISpecBuildEntry>read GetBuildEntries;
@@ -267,22 +296,31 @@ type
   ISpecTemplate = interface(ISpecTemplateBase)
     ['{FB9EE9B8-E77B-4E45-A838-E1C9C9947CFB}']
     function GetName : string;
-    property Name : string read GetName;
+    procedure SetName(templateName: string);
+
+    function Clone : ISpecTemplate;
+
+    property Name : string read GetName write SetName;
   end;
 
 
   ISpecTargetPlatform = interface(ISpecTemplateBase)
     ['{43BE69CA-0C29-4147-806B-460FFF402A68}']
     function GetPlatforms : TArray<TDPMPlatform>;
+    procedure SetPlatforms(platforms: TArray<TDPMPlatform>);
     function GetTemplateName : string;
+    procedure SetTemplateName(name: string);
     function GetCompiler : TCompilerVersion;
+    procedure SetCompiler(compiler: TCompilerVersion);
     function GetVariables : TStrings;
 
     function CloneForPlatform(const platform : TDPMPlatform) : ISpecTargetPlatform;
+    function PlatformContains(platformName:string): Boolean;
+    function ToString : string;
 
-    property Compiler : TCompilerVersion read GetCompiler;
-    property Platforms : TArray<TDPMPlatform>read GetPlatforms;
-    property TemplateName : string read GetTemplateName;
+    property Compiler : TCompilerVersion read GetCompiler write SetCompiler;
+    property Platforms : TArray<TDPMPlatform> read GetPlatforms write SetPlatforms;
+    property TemplateName : string read GetTemplateName write SetTemplateName;
     property Variables : TStrings read GetVariables;
   end;
 
@@ -298,6 +336,11 @@ type
     //builds out the full spec
     function PreProcess(const version : TPackageVersion; const properties : TStringList) : boolean;
     function GenerateManifestJson(const version : TPackageVersion; const targetPlatform : ISpecTargetPlatform) : string;
+    function FindTemplate(const name : string) : ISpecTemplate;
+    function NewTemplate(const name: string): ISpecTemplate;
+    procedure RenameTemplate(const currentTemplateName: string; const NewTemplateName:string);
+    procedure DeleteTemplate(const templateName: string);
+    function DuplicateTemplate(const sourceTemplate: ISpecTemplate; const newTemplateName: string): ISpecTemplate;
 
     property MetaData : ISpecMetaData read GetMetaData;
     property TargetPlatforms : IList<ISpecTargetPlatform>read GetTargetPlatforms;
@@ -310,12 +353,11 @@ type
   IPackageSpecReader = interface
     ['{8A20F825-8DCA-4784-BDBD-8F91A651BA72}']
     function ReadSpec(const fileName : string) : IPackageSpec;
-    function ReadSpecString(const specString : string) : IPackageSpec;
   end;
 
   IPackageSpecWriter = interface
     ['{F3370E25-2E9D-4353-9985-95C75D35D68E}']
-    function CreateSpecFile(const options : TSpecOptions) : boolean;
+    procedure SaveToFile(filename: string);
   end;
 
 

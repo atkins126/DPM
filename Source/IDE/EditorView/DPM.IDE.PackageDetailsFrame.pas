@@ -188,10 +188,13 @@ uses
   WinApi.ShellApi,
   WinApi.ActiveX,
   WinApi.CommCtrl,
+  {$IF CompilerVersion > 34.0 }
+   BrandingAPI,
+  {$IFEND}
   DPM.IDE.Constants,
   DPM.Core.Utils.Strings,
   DPM.Core.Utils.System,
-  DPM.Core.Package.Metadata,
+  DPM.Core.Package.Classes,
   DPM.Core.Package.SearchResults,
   DPM.Core.Dependency.Interfaces;
 { TGroupPackageDetailsFrame }
@@ -280,7 +283,7 @@ end;
 procedure TPackageDetailsFrame.DoGetPackageMetaDataAsync(const id: string; const version: string; const compilerVersion: TCompilerVersion; const platform: TDPMPlatform);
 var
   metaData : IPackageMetadata;
-  packageId : IPackageId;
+  packageId : IPackageIdentity;
   packageVersion : TPackageVersion;
   item : IPackageSearchResultItem ;
   key : string;
@@ -290,7 +293,7 @@ begin
   if not FMetaDataCache.TryGetValue(key, item) then
   begin
     packageVersion := TPackageVersion.Parse(version);
-    packageId := TPackageId.Create(id, packageVersion, compilerVersion, platform);
+    packageId := TPackageIdentity.Create('', id, packageVersion, compilerVersion, platform);
     metaData :=  FPackageCache.GetPackageMetadata(packageId);
     if metaData <> nil then
     begin
@@ -363,7 +366,6 @@ begin
     if projectCount = 0 then
       projectCount := 1;
     FHost.BeginInstall(projectCount);
-
     installResult := FPackageInstaller.Install(FCancellationTokenSource.Token, options, FInstallerContext);
     if installResult then
     begin
@@ -503,7 +505,13 @@ begin
   {$IFDEF STYLEELEMENTS}
   StyleElements := [seFont];
   {$ENDIF}
-
+  {$IF CompilerVersion > 34.0 }
+  if TIDEThemeMetrics.Font.Enabled then
+  begin
+    Font.Assign( TIDEThemeMetrics.Font.GetFont );
+    TIDEThemeMetrics.Font.AdjustDPISize( Font, TIDEThemeMetrics.Font.Size, CurrentPPI );
+  end;
+  {$IFEND}
   //trying to inject the grid and the splitter inside the design time controls.
   FProjectsGrid := TVersionGrid.Create(AOwner);
   FProjectsGrid.Margins.Left := 5;
@@ -671,9 +679,9 @@ begin
       if packageRefs <> nil then
       begin
         projectRef := nil;
-        projectRefs := packageRefs.FindDependency(LowerCase(FProjectGroup.Projects[i].FileName));
+        projectRefs := packageRefs.FindTopLevelChild(LowerCase(FProjectGroup.Projects[i].FileName));
         if projectRefs <> nil then
-          projectRef := projectRefs.FindDependency(LowerCase(packageId));
+          projectRef := projectRefs.FindTopLevelChild(LowerCase(packageId));
       end;
 
       if projectRef <> nil then
@@ -1006,8 +1014,8 @@ begin
   options.Platforms := [FPackageMetaData.Platform];
   options.Prerelease := FIncludePreRelease;
   options.CompilerVersion := IDECompilerVersion;
+  options.Sources := FPackageMetaData.SourceName;
   DoPackageInstall(options, false);
-  //call common function
 
 end;
 

@@ -39,7 +39,7 @@ uses
   DPM.Core.Options.Restore,
   DPM.Core.Package.Interfaces,
   DPM.Core.Dependency.Interfaces,
-  DPM.Core.Spec.Interfaces;
+  DPM.Core.Manifest.Interfaces;
 
 
 type
@@ -73,16 +73,19 @@ type
     procedure RecordGraph(const projectFile : string; const platform : TDPMPlatform; const graph : IPackageReference);
 
     ///<summary> called from the package installer during install/restore - to install design time packages. See IDE implementation</summary>
-    function InstallDesignPackages(const cancellationToken: ICancellationToken; const projectFile : string; const packageSpecs: IDictionary<string, IPackageSpec>) : boolean;
+    function InstallDesignPackages(const cancellationToken: ICancellationToken; const projectFile : string; const platform: TDPMPlatform; const packageManifests : IDictionary<string, IPackageManifest>) : boolean;
 
 
     ///<summary> Called from the dependency resolver to record package resolutions, so we can detect conflicts in other projects
     ///  in the project group.
     ///</summary>
-    procedure RecordResolutions(const projectFile: string; const platform : TDPMPlatform; const resolutions : TArray<IResolution>);
+    procedure RecordResolutions(const projectFile: string; const platform : TDPMPlatform; const resolutions : TArray<IResolvedPackage>);
     ///<summary> Check for an existing package resolution in already loaded projects in the group.
     ///</summary>
-    function FindPackageResolution(const projectFile: string; const platform : TDPMPlatform; const packageId : string ) : IResolution;
+    function FindPackageResolution(const projectFile: string; const platform : TDPMPlatform; const packageId : string ) : IResolvedPackage;
+
+    //remove an existing resolution - need to do this when upgrading a package.
+    procedure RemoveResolution(const platform : TDPMPlatform; const packageId : string);
 
   end;
 

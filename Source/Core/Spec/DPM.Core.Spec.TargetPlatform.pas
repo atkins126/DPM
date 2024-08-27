@@ -38,6 +38,9 @@ uses
   DPM.Core.Spec.TemplateBase,
   DPM.Core.Spec.Interfaces;
 
+
+//NOTE: TSpecTargetPlatform descends from TSpecTemplateBase because we need this when we apply the templates during pack.
+// and also when we load the package spec in the IDE for dependencies.
 type
   TSpecTargetPlatform = class(TSpecTemplateBase, ISpecTargetPlatform)
   private
@@ -48,17 +51,22 @@ type
 
   protected
     function GetPlatforms : TArray<TDPMPlatform>;
+    procedure SetPlatforms(platforms: TArray<TDPMPlatform>);
     function GetTemplateName : string;
+    procedure SetTemplateName(name: string);
     function GetCompiler : TCompilerVersion;
+    procedure SetCompiler(compiler: TCompilerVersion);
     function GetVariables : TStrings;
 
     function LoadFromJson(const jsonObject : TJsonObject) : Boolean; override;
     function CloneForPlatform(const platform : TDPMPlatform) : ISpecTargetPlatform;
+    function ToJSON: string; override;
   public
     constructor Create(const logger : ILogger); override;
     constructor CreateReducedClone(const logger : ILogger; const targetPlatform : ISpecTargetPlatform; const platform : TDPMPlatform; const variables : TStrings);
     destructor Destroy;override;
-
+    function ToString : string;override;
+    function PlatformContains(platformName:string): Boolean;
   end;
 
 
@@ -66,6 +74,7 @@ implementation
 
 uses
   System.SysUtils,
+  System.StrUtils,
   DPM.Core.Constants,
   DPM.Core.TargetPlatform,
   DPM.Core.Utils.Strings,
@@ -193,7 +202,6 @@ var
   platform : TDPMPlatform;
   platformList : IList<TDPMPlatform>;
   sCompiler : string;
-  sTemplate : string;
 
   variablesObj : TJsonObject;
   i: Integer;
@@ -257,11 +265,7 @@ begin
       result := false;
     end;
   end;
-
-  sTemplate := jsonObject.S['template'];
-  if sTemplate <> '' then
-    FTemplateName := sTemplate;
-
+  FTemplateName := jsonObject.S['template'];
   variablesObj := jsonObject.ExtractObject('variables');
   if variablesObj <> nil then
   begin
@@ -269,8 +273,75 @@ begin
       FVariables.Add(variablesObj.Names[i] + '=' + variablesObj.Values[variablesObj.Names[i]].Value );
     variablesObj.Free;
   end;
-
   result := inherited LoadFromJson(jsonObject) and result;
+end;
+
+function TSpecTargetPlatform.PlatformContains(platformName: string): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to High(FPlatforms) do
+  begin
+    if SameText(DPMPlatformToString(FPlatforms[i]), platformName) then
+      Exit(True);
+  end;
+end;
+
+procedure TSpecTargetPlatform.SetCompiler(compiler: TCompilerVersion);
+begin
+  FCompiler := compiler;
+end;
+
+procedure TSpecTargetPlatform.SetPlatforms(platforms: TArray<TDPMPlatform>);
+begin
+  FPlatforms := platforms;
+end;
+
+procedure TSpecTargetPlatform.SetTemplateName(name: string);
+begin
+  FTemplateName := name;
+end;
+
+function TSpecTargetPlatform.ToJSON: string;
+var
+  json : TJSONObject;
+  jsonVariables : TJSONObject;
+  platformList : string;
+  i: Integer;
+  j: Integer;
+begin
+  json := TJSONObject.Create;
+  try
+    json.S['compiler'] := CompilerToString(FCompiler);
+    platformList := '';
+    for i := 0 to High(FPlatforms) do
+    begin
+      if platformList = '' then
+        platformList := DPMPlatformToString(FPlatforms[i])
+      else
+        platformList := platformList + ', ' + DPMPlatformToString(FPlatforms[i]);
+    end;
+    json.S['platforms'] := platformList;
+    json.S['template'] := FTemplateName;
+    if FVariables.Count > 0 then
+    begin
+      jsonVariables := TJSONObject.Create;
+      for j := 0 to FVariables.Count - 1 do
+      begin
+        jsonVariables.S[FVariables.Names[j]] := FVariables.ValueFromIndex[j];
+      end;
+      json.O['variables'] := jsonVariables;
+    end;
+    Result := json.ToJSON;
+  finally
+    FreeAndNil(json);
+  end;
+end;
+
+function TSpecTargetPlatform.ToString: string;
+begin
+  result := CompilerToString(FCompiler);
 end;
 
 end.

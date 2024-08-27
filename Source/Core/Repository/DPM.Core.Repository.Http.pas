@@ -57,13 +57,13 @@ type
     function DownloadPackage(const cancellationToken : ICancellationToken; const packageIdentity : IPackageIdentity; const localFolder : string; var fileName : string) : Boolean;
     function FindLatestVersion(const cancellationToken : ICancellationToken; const id : string; const compilerVersion : TCompilerVersion; const version : TPackageVersion; const platform : TDPMPlatform; const includePrerelease : boolean) : IPackageIdentity;
 
-    function GetPackageInfo(const cancellationToken : ICancellationToken; const packageId : IPackageId) : IPackageInfo;
+    function GetPackageInfo(const cancellationToken : ICancellationToken; const packageId : IPackageIdentity) : IPackageInfo;
     function GetPackageVersions(const cancellationToken : ICancellationToken; const id : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const preRelease : boolean) : IList<TPackageVersion>;
     function GetPackageVersionsWithDependencies(const cancellationToken : ICancellationToken; const id : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const versionRange : TVersionRange; const preRelease : Boolean) : IList<IPackageInfo>;
 
     function List(const cancellationToken : ICancellationToken; const options : TSearchOptions) : IList<IPackageListItem>; overload;
     function GetPackageFeed(const cancellationToken : ICancellationToken; const options : TSearchOptions; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) : IPackageSearchResult;
-    function GetPackageFeedByIds(const cancellationToken : ICancellationToken;  const ids : IList<IPackageId>; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) :  IPackageSearchResult;
+    function GetPackageFeedByIds(const cancellationToken : ICancellationToken;  const ids : IList<IPackageIdentity>; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) :  IPackageSearchResult;
 
 
     function GetPackageIcon(const cancelToken : ICancellationToken; const packageId : string; const packageVersion : string; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform) : IPackageIcon;
@@ -83,6 +83,7 @@ uses
   System.SysUtils,
   System.IOUtils,
   System.Classes,
+  System.Diagnostics,
   JsonDataObjects,
   VSoft.HttpClient,
   VSoft.URI,
@@ -90,7 +91,7 @@ uses
   DPM.Core.Spec,
   DPM.Core.Package.Icon,
   DPM.Core.Constants,
-  DPM.Core.Package.Metadata,
+  DPM.Core.Package.Classes,
   DPM.Core.Package.SearchResults,
   DPM.Core.Sources.ServiceIndex,
   DPM.Core.Package.ListItem;
@@ -144,6 +145,7 @@ var
   path : string;
   destFile : string;
   uri : IUri;
+  stopwatch : TStopwatch;
 begin
   result := false;
   serviceIndex := GetServiceIndex(cancellationToken);
@@ -166,27 +168,29 @@ begin
   request := httpClient.CreateRequest(path)
               .WithHeader(cUserAgentHeader,cDPMUserAgent);
 
-
+  ForceDirectories(localFolder);
   destFile := IncludeTrailingPathDelimiter(localFolder) + packageIdentity.ToString + cPackageFileExt;
 
   request.SaveAsFile := destFile;
+  stopwatch := TStopwatch.StartNew;
   Logger.Information('GET ' + uri.BaseUriString + path);
   try
     response := request.Get(cancellationToken);
   except
     on ex : Exception do
     begin
-      Logger.Error('Error fetching downloading package from server : ' + ex.Message);
+      Logger.Error('Error downloading package from server : ' + ex.Message);
       exit;
     end;
   end;
 
   if response.StatusCode <> 200 then
   begin
-    Logger.Error('Error fetching downloading package from server : ' + response.ErrorMessage);
+    Logger.Error('Error downloading package from server : ' + response.ErrorMessage);
     exit;
   end;
-  Logger.Information('OK ' + uri.BaseUriString + path);
+  stopwatch.Stop;
+  Logger.Information('OK ' + uri.BaseUriString + path + ' [' + IntToStr(stopwatch.ElapsedMilliseconds) + 'ms]');
 
   fileName := destFile;
   result := true;
@@ -383,7 +387,7 @@ begin
 
 end;
 
-function TDPMServerPackageRepository.GetPackageFeedByIds(const cancellationToken: ICancellationToken; const ids: IList<IPackageId>; const compilerVersion: TCompilerVersion;
+function TDPMServerPackageRepository.GetPackageFeedByIds(const cancellationToken: ICancellationToken; const ids: IList<IPackageIdentity>; const compilerVersion: TCompilerVersion;
   const platform: TDPMPlatform): IPackageSearchResult;
 var
   httpClient : IHttpClient;
@@ -550,6 +554,7 @@ begin
   if SameText(response.ContentType, 'image/png') then
   begin
     stream := TMemoryStream.Create;
+    response.ResponseStream.Seek(0, soFromBeginning);
     stream.CopyFrom(response.ResponseStream,response.ContentLength);
     result := CreatePackageIcon(TPackageIconKind.ikPng, stream);
   end
@@ -563,7 +568,7 @@ begin
 
 end;
 
-function TDPMServerPackageRepository.GetPackageInfo(const cancellationToken : ICancellationToken; const packageId : IPackageId) : IPackageInfo;
+function TDPMServerPackageRepository.GetPackageInfo(const cancellationToken : ICancellationToken; const packageId : IPackageIdentity) : IPackageInfo;
 var
   httpClient : IHttpClient;
   request : TRequest;
@@ -817,7 +822,7 @@ var
   i: Integer;
   packageInfo : IPackageInfo;
   uri : IUri;
-
+  stopwatch : TStopwatch;
 begin
   result := TCollections.CreateList<IPackageInfo>;
 
@@ -844,10 +849,11 @@ begin
               //parameters can't have spaces.. winhttp will report invalid header!
              .WithParameter('versionRange', StringReplace(versionRange.ToString, ' ', '', [rfReplaceAll]))
              .WithParameter('prerel', Lowercase(BoolToStr(preRelease, true)));
-
+  stopwatch := TStopwatch.StartNew;
   try
     Logger.Information('GET ' + uri.BaseUriString + path);
     response := request.Get(cancellationToken);
+    stopwatch.Stop;
   except
     on ex : Exception do
     begin
@@ -861,7 +867,7 @@ begin
     Logger.Error('Error fetching packageinfo from server : ' + response.ErrorMessage);
     exit;
   end;
-  Logger.Information('OK ' + uri.BaseUriString + path);
+  Logger.Information('OK ' + uri.BaseUriString + path + ' [' + IntTostr(stopwatch.ElapsedMilliseconds) + 'ms]');
 
   try
     jsonObj := TJsonBaseObject.Parse(response.Response) as TJsonObject;
@@ -909,8 +915,9 @@ begin
 
   httpClient := THttpClientFactory.CreateClient(uri.BaseUriString);
   request := httpClient.CreateRequest(uri.AbsolutePath)
-              .WithHeader(cUserAgentHeader,cDPMUserAgent);
+              .WithHeader(cUserAgentHeader,cDPMUserAgent).WithAccept('application/json');
   try
+//    Logger.Debug('getting service Index ' + self.SourceUri);
     response := request.Get(cancellationToken);
     if response.StatusCode <> 200 then
     begin
@@ -926,6 +933,9 @@ begin
     on e : Exception do
     begin
       Logger.Error('Error parsing serviceindex json : ' + e.Message);
+      Logger.Error(e.ClassName);
+      if e.InnerException <> nil then
+        Logger.Error(e.InnerException.Message);
       exit;
     end;
   end;

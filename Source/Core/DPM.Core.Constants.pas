@@ -34,8 +34,11 @@ const
   cLockFileExt = '.dpmlock';
   cPackageFileExt = '.dpkg';
   cPackageSpecExt = '.dspec';
+  cPackageManifestExt = '.manifest';
+
   //fixed filename for the package dspec so we can easily extract it
-  cPackageMetaFile = 'package' + cPackageSpecExt;
+  cOldPackageManifestFile = 'package' + cPackageSpecExt; //for older packages
+  cPackageManifestFile = 'package' + cPackageManifestExt;
   cIconFileSVG = 'icon.svg';
   cIconFilePNG = 'icon.png';
 
@@ -51,31 +54,30 @@ const
 
   cMaxPackageIdLength = 100;
 
-  cPackageFileRegex = '^(\w+\.\w+)\-([^\-]+)\-([^\-]+)\-(.*)$';
-  cPackageIdRegex = '^(\w+\.\w+)$';
+  cPackageFileRegex = '^((?:\w+)(?:\.\w+)+)\-([^\-]+)\-([^\-]+)\-(.*)$';
+  cPackageIdRegex = '^((?:\w+)(?:\.\w+)+)$';
 
   //template regexs
   //compiler version
-  cPackageFileRegexCV = '^(\w+\.\w+)\-(%s)\-([^\-]+)\-(.*)$';
+  cPackageFileRegexCV = '^((?:\w+)(?:\.\w+)+)\-(%s)\-([^\-]+)\-(.*)$';
   //compiler version and platform
-  cPackageFileRegexCVP = '^(\w+\.\w+)\-(%s)\-(%s)\-(.*)$';
+  cPackageFileRegexCVP = '^((?:\w+)(?:\.\w+)+)\-(%s)\-(%s)\-(.*)$';
 
   //compiler version and platform and package version
-  cPackageFileRegexCVPV = '^(\w+\.\w+)\-(%s)\-(%s)\-(%s)$';
+  cPackageFileRegexCVPV = '^((?:\w+)(?:\.\w+)+)\-(%s)\-(%s)\-(%s)$';
 
   //compiler version and package version - don't think this would ever be used?
-  cPackageFileRegexCVV = '^(\w+\.\w+)\-(%s)\-(%s)\-(%s)$';
+  cPackageFileRegexCVV = '^((?:\w+)(?:\.\w+)+)\-(%s)\-(%s)\-(%s)$';
 
   //platform
-  cPackageFileRegexP = '^(\w+\.\w+)\-([^\-]+)\-(%s)\-(.*)$';
+  cPackageFileRegexP = '^((?:\w+)(?:\.\w+)+)\-([^\-]+)\-(%s)\-(.*)$';
 
   //platform and version
-  cPackageFileRegexPV = '^(\w+\.\w+)\-(%s)\-(%s)\-(.*)$';
+  cPackageFileRegexPV = '^((?:\w+)(?:\.\w+)+)\-(%s)\-(%s)\-(.*)$';
 
   //version
-  cPackageFileRegexV = '^(\w+\.\w+)\-([^\-]+)\-([^\-]+)\-(%s)$';
+  cPackageFileRegexV = '^((?:\w+)(?:\.\w+)+)\-([^\-]+)\-([^\-]+)\-(%s)$';
 
-  cGroupNode = 'group-node';
   cRootNode = 'root-node';
   cUserAgentHeader = 'User-Agent';
   cDPMUserAgent = 'DPM ' + cDPMClientVersion;
