@@ -76,15 +76,15 @@ type
     procedure SetVerbosity(const value : TCompilerVerbosity);
 
 
-    function GetPlatformName : string;
+//  function GetPlatformName : string;
     function GetProjectSearchPath(const configName : string) : string;
 
     function GetCompilerOutput : TStrings;
 
     function GetMSBuildParameters(const configName : string; const packageVersion : TPackageVersion) : string;
-    function GetCommandLine(const projectFile : string; const configName : string; const packageVersion : TPackageVersion) : string;
+    function GetCommandLine(const platform : TDPMPlatform; const projectFile : string; const configName : string; const packageVersion : TPackageVersion) : string;
 
-    function BuildProject(const cancellationToken : ICancellationToken; const projectFile : string; const configName : string; const packageVersion : TPackageVersion; const forDesign : boolean) : Boolean;
+    function BuildProject(const cancellationToken : ICancellationToken; const platform : TDPMPlatform; const projectFile : string; const configName : string; const packageVersion : TPackageVersion; const forDesign : boolean) : Boolean;
   public
     constructor Create(const logger : ILogger; const compilerVersion : TCompilerVersion; const platform : TDPMPlatform; const env : ICompilerEnvironmentProvider);
     destructor Destroy; override;
@@ -98,16 +98,19 @@ uses
   System.IOUtils,
   DPM.Core.Utils.Path,
   DPM.Core.Utils.Process,
+  DPM.Core.Utils.System,
   DPM.Core.Compiler.ProjectSettings;
 
 
 { TMSBuildCompiler }
 
-function TMSBuildCompiler.BuildProject(const cancellationToken : ICancellationToken; const projectFile : string; const configName : string; const packageVersion : TPackageVersion; const forDesign : boolean) : Boolean;
+function TMSBuildCompiler.BuildProject(const cancellationToken : ICancellationToken; const platform : TDPMPlatform; const projectFile : string; const configName : string; const packageVersion : TPackageVersion; const forDesign : boolean) : Boolean;
 var
   commandLine : string;
   env : IEnvironmentBlock;
+  i : integer;
 begin
+
   result := false;
   FBuildForDesign := forDesign;
   FCompilerOutput.Clear;
@@ -116,7 +119,7 @@ begin
   FProjectFile := projectFile;
 
   try
-    commandLine := GetCommandLine(projectFile, configName, packageVersion);
+    commandLine := GetCommandLine(platform, projectFile, configName, packageVersion);
   except
     on e : Exception do
     begin
@@ -154,8 +157,8 @@ begin
     begin
       FLogger.Error('Package compilation failed.');
       FCompilerOutput.LoadFromFile(FCompilerLogFile);
-      //TODO : This should be logged as an error, but then you would get a wall of red text which is hard to read.
-      FLogger.Information(FCompilerOutput.Text);
+      for i := 0 to FCompilerOutput.Count -1 do
+        FLogger.Information(FCompilerOutput.Strings[i]);
       FCompilerOutput.Clear;
     end;
     TFile.Delete(FCompilerLogFile);
@@ -188,11 +191,11 @@ begin
   result := FBPLOutput;
 end;
 
-function TMSBuildCompiler.GetCommandLine(const projectFile, configName : string; const packageVersion : TPackageVersion) : string;
+function TMSBuildCompiler.GetCommandLine(const platform : TDPMPlatform; const projectFile, configName : string; const packageVersion : TPackageVersion) : string;
 begin
   //I don't like this... but it will do for a start.
 
-  result := 'call "' + FEnv.GetRsVarsFilePath(FCompilerVersion) + '"';
+  result := 'call "' + FEnv.GetRsVarsFilePath(platform, FCompilerVersion) + '"';
   result := result + ' & msbuild "' + projectfile + '" ' + GetMSBuildParameters(configName, packageVersion);
   result := ' cmd /c ' + result + ' > ' + FCompilerLogFile;
 end;
@@ -223,7 +226,7 @@ begin
   //We should investigate updating the dproj.
   result := '/target:BuildVersionResource;Build';
   result := result + ' /p:Config=' + configName;
-  if FBuildForDesign then
+  if FBuildForDesign and (not TSystemUtils.Is64bitIDE) then
     result := result + ' /p:Platform=' + DPMPlatformToBDString(TDPMPlatform.Win32)
   else
     result := result + ' /p:Platform=' + DPMPlatformToBDString(FPlatform);
@@ -274,13 +277,15 @@ begin
   result := FPlatform;
 end;
 
-function TMSBuildCompiler.GetPlatformName: string;
-begin
-  if FBuildForDesign then
-    result := DPMPlatformToBDString(TDPMPlatform.Win32)
-  else
-    result := DPMPlatformToBDString(FPlatform);
-end;
+//function TMSBuildCompiler.GetPlatformName: string;
+//begin
+//  if FBuildForDesign then
+//  begin
+//    result := DPMPlatformToBDString(TDPMPlatform.Win32)
+//  end
+//  else
+//    result := DPMPlatformToBDString(FPlatform);
+//end;
 
 function TMSBuildCompiler.GetProjectSearchPath(const configName: string): string;
 var
@@ -300,12 +305,20 @@ begin
   end;
 
   if FBuildForDesign then
-    platform := TDPMPlatform.Win32
+  begin
+    if TSystemUtils.Is64BitIDE then
+      platform := TDPMPlatform.Win64
+    else
+      platform := TDPMPlatform.Win32
+  end
   else
     platform := FPlatform;
 
-  settingsLoader := TDPMProjectSettingsLoader.Create(FProjectFile, configName, platform);
+  FLogger.Debug('Loading project to get search path : ' + FProjectFile);
+  settingsLoader := TDPMProjectSettingsLoader.Create(FLogger, FProjectFile, configName, platform);
   s := settingsLoader.GetSearchPath;
+  FLogger.Debug('Project Search Path : ' + s);
+
   if s <> '' then
     result := s + ';' + result;
 
